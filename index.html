@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Eye Suite Stats</title>
+<style>
+/* Layout: a header bar with filters, three rows of tiles (Today / This week / All time),
+   and a detail view that replaces the tiles when one is clicked. */
+:root{
+  --bg:#f3f1ec; --panel:#ffffff; --ink:#1f2328; --soft:#5d6470; --line:#dedad2; --hover:#f7f5f0;
+  --accent:#8a5a14; --bad:#b4442f; --good:#2f7d4f;
+  --gallery:#b8862b; --castle:#56698a; --wing:#3c8a57; --flag:#c0453b; --wine:#8a2f55;
+  --serif: Georgia, "Times New Roman", serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#15171b; --panel:#1e2127; --ink:#e8e6e1; --soft:#a1a7b1; --line:#30343c; --hover:#262a31;
+         --accent:#e0b866; --bad:#e2795f; --good:#6cc391;
+         --gallery:#d9a646; --castle:#8ea3c6; --wing:#64b884; --flag:#e0675c; --wine:#c9668f; color-scheme: dark; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+h1{font:italic 700 28px/1.1 var(--serif);margin:0}
+.sub{color:var(--soft);font-size:13px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{font:600 13px var(--sans);padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.chip[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.chip .dot{width:9px;height:9px;border-radius:50%}
+.chip:focus-visible,.tile:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{font:600 13px var(--sans);padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+label.toggle{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--soft);cursor:pointer}
+.note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);padding:10px 14px;font-size:13px;color:var(--soft);border-radius:4px}
+.err{border-left-color:var(--bad);color:var(--ink)}
+h2{font:italic 700 19px var(--serif);margin:0 0 10px}
+.row{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 14px 10px;text-align:left;cursor:pointer;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:4px;min-width:0}
+.tile:hover{background:var(--hover)}
+.tile .lab{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);font-weight:600}
+.tile .num{font:700 32px/1.1 var(--sans);font-variant-numeric:tabular-nums}
+.tile .cmp{font-size:12px;color:var(--soft);font-variant-numeric:tabular-nums}
+.tile .apps{display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--soft);font-variant-numeric:tabular-nums}
+.tile .apps span{display:inline-flex;gap:3px;align-items:center}
+.tile .apps i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.tile svg{display:block;width:100%;height:30px;margin-top:2px}
+.detail{display:flex;flex-direction:column;gap:18px}
+.dhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.dhead h2{margin:0;font-size:24px}
+.periods{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.period{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.period b{display:block;font:700 24px var(--sans);font-variant-numeric:tabular-nums}
+.period span{font-size:12px;color:var(--soft)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;min-width:0}
+.card h3{margin:0 0 10px;font-size:14px;font-weight:700}
+.card p.hint{margin:0 0 10px;font-size:12px;color:var(--soft)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--soft);font:11px var(--sans)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--soft);margin-top:6px}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:middle}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 10px 6px 0;border-top:1px solid var(--line);vertical-align:top}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);font-weight:600}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;padding-right:0;padding-left:10px}
+td.n{white-space:nowrap}
+.empty{color:var(--soft);font-size:13px;padding:6px 0}
+footer{color:var(--soft);font-size:12px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.gate{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.gate[hidden]{display:none}
+.gateBox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:28px 26px;max-width:320px;width:90%;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+.gateBox h1{font:italic 700 24px/1.1 var(--serif);margin:0}
+.gateBox .sub{color:var(--soft);font-size:13px;margin:0}
+.gateBox input{font:15px var(--sans);padding:9px 10px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.gateErr{color:var(--bad);font-size:13px}
+</style>
+</head>
+<body>
+<div id="gate" class="gate">
+  <form id="gateForm" class="gateBox">
+    <h1>Eye Suite Stats</h1>
+    <p class="sub">Enter the password to view.</p>
+    <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
+    <button class="btn" type="submit">Unlock</button>
+    <div id="gateErr" class="gateErr" hidden>Wrong password — try again.</div>
+  </form>
+</div>
+<script>
+const GATE_HASH = '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86'; // sha-256 of the current password — regenerate with set-password.html
+const GATE_KEY = 'eyestats_unlocked_v1';
+(function(){
+  var gate = document.getElementById('gate');
+  async function sha256Hex(s){
+    var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+    return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+  }
+  if (localStorage.getItem(GATE_KEY) === GATE_HASH) { gate.hidden = true; return; }
+  document.getElementById('gateForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var h = await sha256Hex(document.getElementById('gatePass').value);
+    if (h === GATE_HASH) { localStorage.setItem(GATE_KEY, GATE_HASH); gate.hidden = true; }
+    else { document.getElementById('gateErr').hidden = false; document.getElementById('gatePass').select(); }
+  });
+})();
+</script>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Eye Suite Stats</h1>
+      <div class="sub" id="updated">Loading…</div>
+    </div>
+    <div class="controls">
+      <div class="controls" id="appChips" role="group" aria-label="Show app"></div>
+      <label class="toggle"><input type="checkbox" id="incTests"> Include test devices</label>
+      <button class="btn" id="refresh" type="button">Refresh</button>
+      <button class="btn" id="lock" type="button" title="Require the password again on this device">Lock</button>
+    </div>
+  </header>
+  <div id="notes"></div>
+  <main id="main"></main>
+  <footer>Figures exclude registered test devices unless ticked. Charts cover the last 90 days. Days are UK days; "this week" starts on Monday. Usage figures (players, opens, rounds) count from each app's usage-stats version: Gallery v5.16, Castle v1.19, Wing v2.16, Flag v1.12, Wine v0.34.</footer>
+</div>
+
+<script>
+// Public, read-only access: the same publishable key the apps use. The database
+// function returns totals only (see dashboard/get-dashboard-stats.sql).
+const SUPABASE_URL = 'https://mvpviwcixhrswrpadtfj.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Vs0mr-szOBVSj6yGUGsnPA_3jBxk2xm';
+const DAYS = 90;
+const REFRESH_MS = 5 * 60 * 1000;
+
+const APPS = [
+  { id: 'gallery', name: 'Gallery' }, { id: 'castle', name: 'Castle' }, { id: 'wing', name: 'Wing' },
+  { id: 'flag', name: 'Flag' }, { id: 'wine', name: 'Wine' },
+];
+const appName = id => (APPS.find(a => a.id === id) || { name: id }).name;
+const appColour = id => `var(--${id})`;
+
+const store = {
+  get(k, d){ try { const v = localStorage.getItem('eyestats_' + k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem('eyestats_' + k, JSON.stringify(v)); } catch(e){} },
+};
+let state = { app: store.get('app', 'all'), includeTests: store.get('incTests', false), view: null, data: null };
+
+const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '–' : Math.round(n).toLocaleString('en-GB');
+const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
+const mins = s => s ? (s / 60 < 10 ? (s / 60).toFixed(1) : Math.round(s / 60)) + ' min' : '–';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const dayLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+function sourceLabel(src){
+  let s = src; try { s = decodeURIComponent(src); } catch(e){}
+  if (s === 'google-play') return 'Google Play (found in the store)';
+  if (s === '(not known)') return 'Not reported (older build or no referrer)';
+  if (s === '(not set)') return 'Not set by Play';
+  return s;
+}
+const regionNames = (() => { try { return new Intl.DisplayNames(['en-GB'], { type: 'region' }); } catch(e){ return null; } })();
+function localeLabel(loc){
+  const m = /^[a-z]{2,3}[-_]([A-Z]{2})/.exec(loc || '');
+  const country = m && regionNames ? regionNames.of(m[1]) : null;
+  return country ? `${country} (${loc})` : loc;
+}
+
+// ------------------------------------------------------------- data access
+async function load(){
+  document.getElementById('updated').textContent = 'Loading…';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_dashboard_stats`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_days: DAYS, p_include_tests: state.includeTests }),
+    });
+    if (!res.ok) throw new Error('the database answered ' + res.status);
+    state.data = await res.json();
+    setNotes('');
+  } catch (e) {
+    setNotes(`<div class="note err">Couldn't load the figures: ${esc(e.message)}. Check the connection and press Refresh.</div>`);
+    if (!state.data) { document.getElementById('main').innerHTML = ''; document.getElementById('updated').textContent = 'Not loaded'; return; }
+  }
+  render();
+}
+function setNotes(html){ document.getElementById('notes').innerHTML = html; }
+
+// Helpers over the loaded data, respecting the app filter
+const inApp = r => state.app === 'all' || r.app === state.app;
+const daily = () => state.data.daily.filter(inApp);
+function sumDays(field, from, to){
+  return daily().filter(r => r.day >= from && r.day <= to).reduce((t, r) => t + (r[field] || 0), 0);
+}
+function byAppDays(field, from, to){
+  const o = {}; APPS.forEach(a => o[a.id] = 0);
+  state.data.daily.filter(r => r.day >= from && r.day <= to).forEach(r => o[r.app] += (r[field] || 0));
+  return o;
+}
+function seriesFor(field, apps){
+  const days = [...new Set(state.data.daily.map(r => r.day))].sort();
+  return days.map(d => {
+    const row = { day: d };
+    apps.forEach(a => {
+      const r = state.data.daily.find(x => x.day === d && x.app === a);
+      row[a] = r ? (r[field] || 0) : 0;
+    });
+    return row;
+  });
+}
+const shownApps = () => state.app === 'all' ? APPS.map(a => a.id) : [state.app];
+function addDays(d, n){ const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
+const uniques = () => state.data.uniques.filter(inApp);
+const totals = () => state.data.totals.filter(inApp);
+const sumOf = (rows, f) => rows.reduce((t, r) => t + (Number(r[f]) || 0), 0);
+
+// ------------------------------------------------------------- metrics
+// Each metric: how to read a period, per-app split, its daily chart, and extra detail sections.
+function periods(){
+  const d = state.data, t = d.today;
+  const dow = Math.round((new Date(t + 'T12:00:00Z') - new Date(d.week_start + 'T12:00:00Z')) / 864e5);
+  return {
+    today: [t, t], yesterday: [addDays(t, -1), addDays(t, -1)],
+    week: [d.week_start, t], lastWeek: [addDays(d.week_start, -7), addDays(d.week_start, -7 + dow)],
+    last7: [addDays(t, -6), t], last30: [addDays(t, -29), t],
+  };
+}
+function sumMetric(field){
+  return {
+    period: (p) => sumDays(field, ...periods()[p]),
+    split: (p) => byAppDays(field, ...periods()[p]),
+  };
+}
+const METRICS = {
+  new_players: { label: 'New players', field: 'new_players', ...sumMetric('new_players'),
+    allTime: () => sumOf(totals(), 'players_seen'),
+    help: 'Phones that opened an app for the first time (with usage stats on).', extra: extraNewPlayers },
+  active_players: { label: 'Active players', field: 'active_players',
+    period: (p) => p === 'today' || p === 'week' || p === 'last7' || p === 'last30'
+      ? sumOf(uniques(), { today: 'today', week: 'this_week', last7: 'last_7', last30: 'last_30' }[p])
+      : sumDays('active_players', ...periods()[p]),
+    split: (p) => { const k = { today: 'today', week: 'this_week', last7: 'last_7', last30: 'last_30' }[p] || 'today';
+      const o = {}; state.data.uniques.forEach(u => o[u.app] = u[k]); return o; },
+    allTime: () => sumOf(uniques(), 'all_time'),
+    help: 'Different phones that opened an app. A player using two apps counts once in each.', extra: extraActive },
+  opens: { label: 'App opens', field: 'opens', ...sumMetric('opens'), allTime: () => sumOf(totals(), 'opens'),
+    help: 'Launches, plus returns after 30+ minutes away.', extra: extraOpens },
+  rounds: { label: 'Rounds played', field: 'rounds', ...sumMetric('rounds'), allTime: () => sumOf(totals(), 'rounds'),
+    help: 'Answers in the main game (Wine: wines played).', extra: extraRounds },
+  avg_time: { label: 'Avg time per open', field: 'seconds', unit: 'time',
+    period: (p) => { const s = sumDays('seconds', ...periods()[p]), o = sumDays('opens', ...periods()[p]); return o ? s / o : null; },
+    split: (p) => { const s = byAppDays('seconds', ...periods()[p]), o = byAppDays('opens', ...periods()[p]); const r = {}; APPS.forEach(a => r[a.id] = o[a.id] ? s[a.id] / o[a.id] : null); return r; },
+    allTime: () => { const s = sumOf(totals(), 'seconds'), o = sumOf(totals(), 'opens'); return o ? s / o : null; },
+    help: 'Time the app was on screen, divided by app opens.', extra: extraOpens },
+  leaderboard: { label: 'Leaderboard names', field: 'leaderboard_updates',
+    period: (p) => sumDays('leaderboard_updates', ...periods()[p]),
+    split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.leaderboard_names); return o; },
+    allTime: () => sumOf(totals(), 'leaderboard_names'),
+    help: 'Names saved on the public leaderboards. The database keeps only the last update, not the sign-up date, so the daily chart counts entries updated that day.', extra: extraLeaderboard },
+  boards: { label: 'Friends boards', field: 'boards_created', ...sumMetric('boards_created'),
+    split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.boards); return o; },
+    allTime: () => sumOf(totals(), 'boards'),
+    help: 'Private boards created. Members joining are shown below.', extra: extraBoards },
+  ad_devices: { label: 'Phones in the ad log', field: 'ad_log_devices', allTimeOnly: true,
+    period: (p) => sumDays('ad_log_devices', ...periods()[p]),
+    split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.ad_log_devices); return o; },
+    allTime: () => sumOf(totals(), 'ad_log_devices'),
+    help: 'Phones that launched an app while ads were switched on (ad_events). Ads have been off in every app since 8-11 Oct, so this log covers roughly 23 Sep to 8 Oct, mostly Castle Eye during testing. The chart counts phones per day.', extra: extraAdLog },
+  ad_launches: { label: 'Launches logged', field: 'ad_log_launches', allTimeOnly: true, ...sumMetric('ad_log_launches'),
+    split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.ad_log_launches); return o; },
+    allTime: () => sumOf(totals(), 'ad_log_launches'),
+    help: 'App launches recorded by the ad log (one per launch while ads were on).', extra: extraAdLog },
+  ad_shown: { label: 'Ads shown', field: 'ad_log_shown', allTimeOnly: true, ...sumMetric('ad_log_shown'),
+    split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.ad_log_shown); return o; },
+    allTime: () => sumOf(totals(), 'ad_log_shown'),
+    help: 'Interstitial and rewarded ads actually shown, from the ad log.', extra: extraAdLog },
+  ad_failures: { label: 'Ad errors', field: 'ad_log_failures', allTimeOnly: true, ...sumMetric('ad_log_failures'),
+    split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.ad_log_failures); return o; },
+    allTime: () => sumOf(totals(), 'ad_log_failures'),
+    help: 'Ads that failed to load or show, and ad set-up failures, from the ad log.', extra: extraAdLog },
+  return_rate: { label: 'Came back', field: 'new_players', unit: 'pct',
+    period: () => null, split: () => { const o = {}; APPS.forEach(a => { const r = state.data.retention.filter(x => x.app === a.id && x.cohort_day < state.data.today); o[a.id] = sumOf(r, 'new_players') ? 100 * sumOf(r, 'came_back') / sumOf(r, 'new_players') : null; }); return o; },
+    allTime: () => { const r = state.data.retention.filter(x => inApp(x) && x.cohort_day < state.data.today); const n = sumOf(r, 'new_players'); return n ? 100 * sumOf(r, 'came_back') / n : null; },
+    help: 'Share of new players (last 60 days, before today) who opened the app again on a later day.', extra: extraActive },
+};
+function allTimeSplit(m){
+  const o = {}, keep = state.app;
+  APPS.forEach(a => { state.app = a.id; o[a.id] = m.allTime(); });
+  state.app = keep; return o;
+}
+const show = (m, v) => v === null || v === undefined ? '–' : m.unit === 'time' ? mins(v) : m.unit === 'pct' ? Math.round(v) + '%' : fmt(v);
+
+// ------------------------------------------------------------- overview
+const ROWS = [
+  { title: 'Today', p: 'today', cmp: 'yesterday', cmpLabel: 'yesterday', keys: ['new_players', 'active_players', 'opens', 'rounds'] },
+  { title: 'This week', p: 'week', cmp: 'lastWeek', cmpLabel: 'same days last week', keys: ['new_players', 'active_players', 'opens', 'rounds', 'avg_time'] },
+  { title: 'All time', p: 'all', keys: ['new_players', 'leaderboard', 'boards', 'return_rate'],
+    labels: { new_players: 'Players seen', return_rate: 'Came back after day 1' } },
+  { title: 'Ad log', p: 'all', keys: ['ad_devices', 'ad_launches', 'ad_shown', 'ad_failures'],
+    note: 'From the ad log (ad_events), which records launches while ads are switched on: about 23 Sep to 8 Oct, mostly Castle Eye during testing. Ads have been off since then.' },
+];
+function render(){
+  const d = state.data; if (!d) return;
+  const when = new Date(d.generated_at).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  document.getElementById('updated').textContent = `Updated ${when} · ${d.include_tests ? 'including' : 'excluding'} test devices`;
+  renderChips();
+  if (state.view) return renderDetail(state.view);
+  const main = document.getElementById('main');
+  main.innerHTML = ROWS.map((row, ri) => `
+    <section><h2>${row.title}</h2>${row.note ? `<p class="sub" style="margin:-4px 0 10px">${esc(row.note)}</p>` : ''}<div class="row">${row.keys.map(k => tileHtml(k, row, ri)).join('')}</div></section>`).join('');
+  main.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openDetail(t.dataset.k)));
+  main.querySelectorAll('section').forEach(s => s.style.marginBottom = '22px');
+}
+function tileHtml(k, row){
+  const m = METRICS[k];
+  const v = row.p === 'all' ? m.allTime() : m.period(row.p);
+  const c = row.cmp ? m.period(row.cmp) : null;
+  const split = row.p === 'all' ? allTimeSplit(m) : m.split(row.p);
+  const apps = state.app === 'all' ? APPS.filter(a => split[a.id]).map(a =>
+    `<span><i style="background:${appColour(a.id)}"></i>${a.name} ${show(m, split[a.id])}</span>`).join('') : '';
+  const spark = row.p !== 'all' && m.unit !== 'pct' ? sparkline(seriesFor(m.field, shownApps()).slice(-14), shownApps()) : '';
+  return `<button class="tile" type="button" data-k="${k}">
+    <span class="lab">${(row.labels && row.labels[k]) || m.label}</span>
+    <span class="num">${show(m, v)}</span>
+    ${row.cmp ? `<span class="cmp">${show(m, c)} ${row.cmpLabel}</span>` : ''}
+    <span class="apps">${apps}</span>${spark}</button>`;
+}
+function sparkline(series, apps){
+  const tot = series.map(r => apps.reduce((t, a) => t + r[a], 0));
+  const max = Math.max(1, ...tot), w = 200, h = 30, bw = w / tot.length;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${tot.map((v, i) =>
+    `<rect x="${i * bw + 1}" y="${h - (v / max) * (h - 2)}" width="${bw - 2}" height="${(v / max) * (h - 2)}" fill="var(--accent)" opacity="${i === tot.length - 1 ? 1 : .45}"></rect>`).join('')}</svg>`;
+}
+function renderChips(){
+  const box = document.getElementById('appChips');
+  box.innerHTML = [{ id: 'all', name: 'All apps' }, ...APPS].map(a =>
+    `<button class="chip" type="button" data-app="${a.id}" aria-pressed="${state.app === a.id}">${a.id === 'all' ? '' : `<span class="dot" style="background:${appColour(a.id)}"></span>`}${a.name}</button>`).join('');
+  box.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { state.app = b.dataset.app; store.set('app', state.app); render(); }));
+}
+
+// ------------------------------------------------------------- detail
+function openDetail(k){ state.view = k; location.hash = k; render(); window.scrollTo(0, 0); }
+function closeDetail(){ state.view = null; history.replaceState(null, '', location.pathname); render(); }
+function renderDetail(k){
+  const m = METRICS[k], main = document.getElementById('main');
+  const per = [['Today', 'today'], ['Yesterday', 'yesterday'], ['This week', 'week'], ['Last 7 days', 'last7'], ['Last 30 days', 'last30']];
+  const periodsHtml = (m.unit === 'pct' || m.allTimeOnly ? [] : per.map(([l, p]) => `<div class="period"><b>${show(m, m.period(p))}</b><span>${l}</span></div>`))
+    .concat(`<div class="period"><b>${show(m, m.allTime())}</b><span>All time</span></div>`).join('');
+  const field = k === 'avg_time' ? null : m.field;
+  const chart = field ? `<div class="card"><h3>${m.label} per day, last ${DAYS} days</h3>${barChart(seriesFor(field, shownApps()), shownApps())}${legend(shownApps())}</div>` : '';
+  main.innerHTML = `<div class="detail">
+    <div class="dhead"><button class="btn" id="back" type="button">‹ All figures</button><h2>${m.label}${state.app === 'all' ? '' : ' · ' + appName(state.app)}</h2></div>
+    <p class="sub" style="margin:0">${esc(m.help)}</p>
+    <div class="periods">${periodsHtml}</div>
+    ${chart}
+    <div class="card"><h3>By app</h3><div class="tbl">${byAppTable(m)}</div></div>
+    ${m.extra ? m.extra() : ''}
+  </div>`;
+  document.getElementById('back').addEventListener('click', closeDetail);
+}
+function byAppTable(m){
+  const ps = m.unit === 'pct' || m.allTimeOnly ? [] : [['Today', 'today'], ['This week', 'week'], ['Last 30 days', 'last30']];
+  const head = `<tr><th>App</th>${ps.map(([l]) => `<th class="n">${l}</th>`).join('')}<th class="n">All time</th></tr>`;
+  const allSplit = allTimeSplit(m);
+  const rows = APPS.filter(a => state.app === 'all' || a.id === state.app).map(a =>
+    `<tr><td><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${appColour(a.id)};margin-right:6px"></span>${a.name}</td>${ps.map(([, p]) => `<td class="n">${show(m, m.split(p)[a.id])}</td>`).join('')}<td class="n">${show(m, allSplit[a.id])}</td></tr>`).join('');
+  return `<table>${head}${rows}</table>`;
+}
+function barChart(series, apps, opts = {}){
+  const box = document.querySelector('.wrap');
+  const W = Math.max(320, Math.min(900, (box ? box.clientWidth : 760) - 60)), H = 220, L = 34, B = 26, T = 8, R = 6;
+  const tot = series.map(r => apps.reduce((t, a) => t + (r[a] || 0), 0));
+  const max = Math.max(1, ...tot), step = niceStep(max);
+  const top = Math.ceil(max / step) * step, bw = (W - L - R) / series.length;
+  const y = v => T + (H - T - B) * (1 - v / top);
+  let g = '';
+  for (let v = 0; v <= top; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"></line><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${fmt(v)}</text>`;
+  series.forEach((r, i) => {
+    let acc = 0; const x = L + i * bw;
+    apps.forEach(a => { const v = r[a] || 0; if (!v) return;
+      g += `<rect x="${x + 1}" y="${y(acc + v)}" width="${Math.max(1, bw - 2)}" height="${y(acc) - y(acc + v)}" fill="${appColour(a)}"><title>${appName(a)} · ${opts.xLabel ? opts.xLabel(r) : dayLabel(r.day)}: ${fmt(v)}</title></rect>`; acc += v; });
+    const lab = opts.xLabel ? opts.xLabel(r) : dayLabel(r.day);
+    const every = opts.every || Math.ceil(series.length / Math.max(3, Math.floor(W / 95)));
+    if (i % every === 0 && (opts.every || i + every <= series.length)) g += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${lab}</text>`;
+    else if (i === series.length - 1 && !opts.every) g += `<text x="${W - R}" y="${H - 8}" text-anchor="end">${lab}</text>`;
+  });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bar chart">${g}</svg>`;
+}
+function niceStep(max){ const raw = max / 4, p = Math.pow(10, Math.floor(Math.log10(raw || 1))); const n = raw / p; return Math.max(1, (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p); }
+const legend = apps => apps.length > 1 ? `<div class="legend">${apps.map(a => `<span><i style="background:${appColour(a)}"></i>${appName(a)}</span>`).join('')}</div>` : '';
+function table(cols, rows, empty){
+  if (!rows.length) return `<div class="empty">${empty || 'Nothing yet.'}</div>`;
+  return `<div class="tbl"><table><tr>${cols.map(c => `<th class="${c.n ? 'n' : ''}">${c.label}</th>`).join('')}</tr>${rows.map(r =>
+    `<tr>${cols.map(c => `<td class="${c.n ? 'n' : ''}">${c.v(r)}</td>`).join('')}</tr>`).join('')}</table></div>`;
+}
+const appCell = r => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${appColour(r.app)};margin-right:6px"></span>${appName(r.app)}`;
+function grouped(rows, keyFn, sumFields){
+  const m = new Map();
+  rows.forEach(r => { const k = keyFn(r); const o = m.get(k) || { key: k, ...Object.fromEntries(sumFields.map(f => [f, 0])) }; sumFields.forEach(f => o[f] += r[f] || 0); m.set(k, o); });
+  return [...m.values()];
+}
+
+// extra sections per metric
+function extraNewPlayers(){
+  const src = grouped(state.data.sources.filter(inApp), r => sourceLabel(r.source) + (r.campaign ? ' · ' + r.campaign : ''), ['players', 'this_week', 'came_back']).sort((a, b) => b.players - a.players);
+  const loc = grouped(state.data.locales.filter(inApp), r => localeLabel(r.locale), ['players']).sort((a, b) => b.players - a.players).slice(0, 15);
+  const ver = state.data.versions.filter(inApp);
+  return `<div class="grid2">
+    <div class="card"><h3>Where players came from</h3><p class="hint">From the Play install referrer. Tagged links (utm_source=…) show up here by name.</p>
+      ${table([{ label: 'Source', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.players) }, { label: 'This week', n: 1, v: r => fmt(r.this_week) }, { label: 'Came back', n: 1, v: r => pct(r.came_back, r.players) }], src)}</div>
+    <div class="card"><h3>Phone language / country</h3><p class="hint">The phone's language setting, not its location.</p>
+      ${table([{ label: 'Setting', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.players) }], loc)}</div>
+    <div class="card"><h3>App versions in use</h3>
+      ${table([{ label: 'App', v: appCell }, { label: 'Version', v: r => esc(r.version) }, { label: 'Players', n: 1, v: r => fmt(r.players) }], ver)}</div>
+  </div>`;
+}
+function extraActive(){
+  const ret = state.data.retention.filter(inApp);
+  const byDay = grouped(ret, r => r.cohort_day, ['new_players', 'back_day_1', 'back_day_7', 'came_back']).sort((a, b) => a.key < b.key ? 1 : -1);
+  const lv = state.data.levels.filter(inApp);
+  const levels = [...new Set(lv.map(r => r.level))].sort((a, b) => a - b).map(l => { const o = { day: l }; shownApps().forEach(a => { const r = lv.find(x => x.app === a && x.level === l); o[a] = r ? r.players : 0; }); return o; });
+  return `<div class="grid2">
+    <div class="card"><h3>Do new players come back?</h3><p class="hint">Players grouped by the day they first opened an app. Day 1 and day 7 fill in as time passes.</p>
+      ${table([{ label: 'First opened', v: r => dayLabel(r.key) }, { label: 'New', n: 1, v: r => fmt(r.new_players) }, { label: 'Back next day', n: 1, v: r => `${fmt(r.back_day_1)} (${pct(r.back_day_1, r.new_players)})` }, { label: 'Back day 7', n: 1, v: r => `${fmt(r.back_day_7)} (${pct(r.back_day_7, r.new_players)})` }, { label: 'Ever came back', n: 1, v: r => `${fmt(r.came_back)} (${pct(r.came_back, r.new_players)})` }], byDay.slice(0, 30), 'No new players yet.')}</div>
+    <div class="card"><h3>Highest level reached (last 30 days)</h3><p class="hint">Each player counted once, at the highest level they reached.</p>
+      ${levels.length ? barChart(levels, shownApps(), { xLabel: r => 'Level ' + r.day, every: 1 }) + legend(shownApps()) : '<div class="empty">Nothing yet.</div>'}</div>
+  </div>`;
+}
+function extraOpens(){
+  const hrs = Array.from({ length: 24 }, (_, h) => { const o = { day: h }; shownApps().forEach(a => { const r = state.data.hours.find(x => x.app === a && x.hour === h); o[a] = r ? r.opens : 0; }); return o; });
+  const t = state.data.totals.filter(inApp);
+  return `<div class="grid2">
+    <div class="card"><h3>When the apps are opened (UK time, last 30 days)</h3>${barChart(hrs, shownApps(), { xLabel: r => String(r.day).padStart(2, '0') + ':00', every: 3 })}${legend(shownApps())}</div>
+    <div class="card"><h3>Time and opens by app (all time)</h3>
+      ${table([{ label: 'App', v: appCell }, { label: 'Opens', n: 1, v: r => fmt(r.opens) }, { label: 'Avg time per open', n: 1, v: r => mins(r.opens ? r.seconds / r.opens : 0) }, { label: 'Opens per player', n: 1, v: r => r.players_seen ? (r.opens / r.players_seen).toFixed(1) : '–' }], t)}</div>
+  </div>`;
+}
+function extraRounds(){
+  const t = state.data.totals.filter(inApp);
+  const last30 = periods().last30;
+  const wk = byAppDays('weekly_rounds', ...last30), ads = byAppDays('ads_shown', ...last30);
+  return `<div class="grid2">
+    <div class="card"><h3>How well players do (all time)</h3>
+      ${table([{ label: 'App', v: appCell }, { label: 'Rounds', n: 1, v: r => fmt(r.rounds) }, { label: 'Correct', n: 1, v: r => pct(r.correct, r.rounds) }, { label: 'Rounds per open', n: 1, v: r => r.opens ? (r.rounds / r.opens).toFixed(1) : '–' }], t)}</div>
+    <div class="card"><h3>Weekly round and ads (last 30 days)</h3>
+      ${table([{ label: 'App', v: appCell }, { label: 'Weekly-round answers', n: 1, v: r => fmt(wk[r.app]) }, { label: 'Ads shown', n: 1, v: r => fmt(ads[r.app]) }], t)}</div>
+  </div>`;
+}
+function extraLeaderboard(){
+  const top = state.data.leaderboard_top.filter(inApp);
+  return `<div class="card"><h3>Top of each leaderboard</h3><p class="hint">These names are already public in the apps.</p>
+    ${table([{ label: 'App', v: appCell }, { label: 'Name', v: r => esc(r.name) }, { label: 'Best streak', n: 1, v: r => fmt(r.best_streak) }, { label: 'Level', n: 1, v: r => r.level ? fmt(r.level) : '–' }], top, 'No names yet (test devices are left out unless ticked).')}</div>`;
+}
+function extraAdLog(){
+  const ev = (state.data.ad_events || []).filter(inApp);
+  const when = v => v ? new Date(v).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '–';
+  const t = state.data.totals.filter(r => inApp(r) && r.ad_log_first);
+  return `<div class="grid2">
+    <div class="card"><h3>Ad log by app</h3>
+      ${table([{ label: 'App', v: appCell }, { label: 'First entry', v: r => when(r.ad_log_first) }, { label: 'Last entry', v: r => when(r.ad_log_last) }, { label: 'Phones', n: 1, v: r => fmt(r.ad_log_devices) }, { label: 'Launches', n: 1, v: r => fmt(r.ad_log_launches) }], t, 'Nothing in the ad log.')}</div>
+    <div class="card"><h3>What was logged</h3><p class="hint">Every event type in the ad log, with how many phones it came from.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Event', v: r => esc(r.event_type) }, { label: 'Count', n: 1, v: r => fmt(r.n) }, { label: 'Phones', n: 1, v: r => fmt(r.devices) }], ev, 'Nothing in the ad log.')}</div>
+  </div>`;
+}
+function extraBoards(){
+  return `<div class="grid2">
+    <div class="card"><h3>Members joining boards per day</h3>${barChart(seriesFor('board_joins', shownApps()), shownApps())}${legend(shownApps())}</div>
+    <div class="card"><h3>Boards and members (all time)</h3>
+      ${table([{ label: 'App', v: appCell }, { label: 'Boards', n: 1, v: r => fmt(r.boards) }, { label: 'Members', n: 1, v: r => fmt(r.board_members) }], state.data.totals.filter(inApp))}</div>
+  </div>`;
+}
+
+// ------------------------------------------------------------- wiring
+const inc = document.getElementById('incTests');
+inc.checked = state.includeTests;
+inc.addEventListener('change', () => { state.includeTests = inc.checked; store.set('incTests', state.includeTests); load(); });
+document.getElementById('refresh').addEventListener('click', load);
+document.getElementById('lock').addEventListener('click', () => { localStorage.removeItem(GATE_KEY); location.reload(); });
+window.addEventListener('hashchange', () => { const k = location.hash.slice(1); state.view = METRICS[k] ? k : null; render(); });
+if (METRICS[location.hash.slice(1)]) state.view = location.hash.slice(1);
+load();
+setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
+let resizeTimer; window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 200); });
+</script>
+</body>
+</html>
