@@ -11,7 +11,7 @@
 :root{
   --bg:#f3f1ec; --panel:#ffffff; --ink:#1f2328; --soft:#5d6470; --line:#dedad2; --hover:#f7f5f0;
   --accent:#8a5a14; --bad:#b4442f; --good:#2f7d4f;
-  --gallery:#b8862b; --castle:#56698a; --wing:#3c8a57; --flag:#c0453b; --wine:#8a2f55;
+  --gallery:#b8862b; --castle:#56698a; --wing:#3c8a57; --flag:#c0453b; --wine:#8a2f55; --history:#6a4fb0;
   --serif: Georgia, "Times New Roman", serif;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
@@ -19,7 +19,7 @@
 @media (prefers-color-scheme: dark){
   :root{ --bg:#15171b; --panel:#1e2127; --ink:#e8e6e1; --soft:#a1a7b1; --line:#30343c; --hover:#262a31;
          --accent:#e0b866; --bad:#e2795f; --good:#6cc391;
-         --gallery:#d9a646; --castle:#8ea3c6; --wing:#64b884; --flag:#e0675c; --wine:#c9668f; color-scheme: dark; }
+         --gallery:#d9a646; --castle:#8ea3c6; --wing:#64b884; --flag:#e0675c; --wine:#c9668f; --history:#a58ae6; color-scheme: dark; }
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
@@ -171,7 +171,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
   </header>
   <div id="notes"></div>
   <main id="main"></main>
-  <footer>Figures exclude registered test devices unless ticked. Charts cover the last 90 days. Days are UK days; "this week" starts on Monday. Usage figures (players, opens, rounds) count from each app's usage-stats version: Gallery v5.16, Castle v1.19, Wing v2.16, Flag v1.12, Wine v0.34.</footer>
+  <footer>Figures exclude registered test devices unless ticked. Charts cover the last 90 days. Days are UK days; "this week" starts on Monday. Usage figures (players, opens, rounds) count from each app's usage-stats version: Gallery v5.16, Castle v1.19, Wing v2.16, Flag v1.12, Wine v0.34. Game figures count from Castle v1.21, Gallery v5.19, Wing v2.19, Flag v1.15 and Wine v0.36.</footer>
 </div>
 
 <script>
@@ -180,11 +180,13 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 const SUPABASE_URL = 'https://mvpviwcixhrswrpadtfj.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Vs0mr-szOBVSj6yGUGsnPA_3jBxk2xm';
 const DAYS = 90;
+const GAME_DAYS = 30;
+const MIN_GAMES_FOR_ADVICE = 30;
 const REFRESH_MS = 5 * 60 * 1000;
 
 const APPS = [
   { id: 'gallery', name: 'Gallery' }, { id: 'castle', name: 'Castle' }, { id: 'wing', name: 'Wing' },
-  { id: 'flag', name: 'Flag' }, { id: 'wine', name: 'Wine' },
+  { id: 'flag', name: 'Flag' }, { id: 'wine', name: 'Wine' }, { id: 'history', name: 'History' },
 ];
 const appName = id => (APPS.find(a => a.id === id) || { name: id }).name;
 const appColour = id => `var(--${id})`;
@@ -226,12 +228,25 @@ async function load(){
     });
     if (!res.ok) throw new Error('the database answered ' + res.status);
     state.data = await res.json();
+    state.games = await loadGames();
     setNotes('');
   } catch (e) {
     setNotes(`<div class="note err">Couldn't load the figures: ${esc(e.message)}. Check the connection and press Refresh.</div>`);
     if (!state.data) { document.getElementById('main').innerHTML = ''; document.getElementById('updated').textContent = 'Not loaded'; return; }
   }
   render();
+}
+// Game statistics (app_games, from Castle v1.21). Optional: until
+// castle-eye-supabase/add-game-stats.sql has been run, the panel says so.
+async function loadGames(){
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_dashboard_games`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_days: GAME_DAYS, p_include_tests: state.includeTests }),
+    });
+    return res.ok ? await res.json() : null;
+  } catch (e) { return null; }
 }
 function setNotes(html){ document.getElementById('notes').innerHTML = html; }
 
@@ -295,7 +310,7 @@ const METRICS = {
   opens: { label: 'App opens', field: 'opens', ...sumMetric('opens'), allTime: () => sumOf(totals(), 'opens'),
     help: 'Launches, plus returns after 30+ minutes away.', extra: extraOpens },
   rounds: { label: 'Rounds played', field: 'rounds', ...sumMetric('rounds'), allTime: () => sumOf(totals(), 'rounds'),
-    help: 'Answers in the main game (Wine: wines played).', extra: extraRounds },
+    help: 'Answers in the main game (Wine: wines played; History: monarchs played).', extra: extraRounds },
   avg_time: { label: 'Avg time per open', field: 'seconds', unit: 'time',
     period: (p) => { const s = sumDays('seconds', ...periods()[p]), o = sumDays('opens', ...periods()[p]); return o ? s / o : null; },
     split: (p) => { const s = byAppDays('seconds', ...periods()[p]), o = byAppDays('opens', ...periods()[p]); const r = {}; APPS.forEach(a => r[a.id] = o[a.id] ? s[a.id] / o[a.id] : null); return r; },
@@ -358,6 +373,7 @@ function render(){
   main.innerHTML = ROWS.map((row, ri) => `
     <section><h2>${row.title}</h2>${row.note ? `<p class="sub" style="margin:-4px 0 10px">${esc(row.note)}</p>` : ''}<div class="row">${row.keys.map(k => tileHtml(k, row, ri)).join('')}</div></section>`).join('');
   main.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openDetail(t.dataset.k)));
+  main.insertAdjacentHTML('beforeend', gamesSection());
   main.querySelectorAll('section').forEach(s => s.style.marginBottom = '22px');
 }
 function tileHtml(k, row){
@@ -385,6 +401,54 @@ function renderChips(){
   box.innerHTML = [{ id: 'all', name: 'All apps' }, ...APPS].map(a =>
     `<button class="chip" type="button" data-app="${a.id}" aria-pressed="${state.app === a.id}">${a.id === 'all' ? '' : `<span class="dot" style="background:${appColour(a.id)}"></span>`}${a.name}</button>`).join('');
   box.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { state.app = b.dataset.app; store.set('app', state.app); render(); }));
+}
+
+// ------------------------------------------------------------- games and ads
+// A game is a main-game run: from the first answer until the player runs out
+// of lives and doesn't watch the ad to carry on.
+function gamesSection(){
+  const g = state.games;
+  const head = `<section><h2>Games and ads</h2><p class="sub" style="margin:-4px 0 10px">Last ${GAME_DAYS} days. A game runs from the first answer until the player runs out of lives and doesn't watch the ad to carry on. Recorded from Castle v1.21, Gallery v5.19, Wing v2.19, Flag v1.15 and Wine v0.36. In Wine a round is a wine and a game ends at a spilled wine.</p>`;
+  if (!g) return head + `<div class="card"><div class="empty">Not set up yet: run <code>castle-eye/castle-eye-supabase/add-game-stats.sql</code> in Supabase's SQL Editor.</div></div></section>`;
+  const rows = g.apps.filter(inApp);
+  if (!rows.length) return head + `<div class="card"><div class="empty">No games recorded yet. They start with Castle Eye v1.21 (and only from phones with usage stats on).</div></div></section>`;
+  const num = v => v === null || v === undefined ? '–' : Number(v).toLocaleString('en-GB', { maximumFractionDigits: 1 });
+  const apps = rows.map(r => r.app);
+  const labels = ['1–4', '5–9', '10–19', '20–29', '30–49', '50–99', '100+'];
+  const series = labels.map(l => { const o = { day: l }; apps.forEach(a => { const b = g.buckets.find(x => x.app === a && x.label === l); o[a] = b ? b.games : 0; }); return o; });
+  const groups = g.groups.filter(inApp);
+  return head + `<div class="detail" style="gap:12px">
+    <div class="card"><h3>How long games last</h3><p class="hint">Rounds = answers in the game, right or wrong. Middle half = the range the middle 50% of games fall in.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Games', n: 1, v: r => fmt(r.games) }, { label: 'Players', n: 1, v: r => fmt(r.players) },
+        { label: 'Avg rounds', n: 1, v: r => num(r.avg_rounds) }, { label: 'Median', n: 1, v: r => num(r.median_rounds) },
+        { label: 'Middle half', n: 1, v: r => `${num(r.p25_rounds)}–${num(r.p75_rounds)}` }, { label: 'Avg time', n: 1, v: r => mins(r.avg_seconds) },
+        { label: 'Secs / round', n: 1, v: r => num(r.seconds_per_round) }], rows)}</div>
+    <div class="card"><h3>Rounds per game</h3>${barChart(series, apps, { xLabel: r => r.day, every: 1 })}${legend(apps)}</div>
+    <div class="card"><h3>How games end</h3><p class="hint">"Left after an ad" = the app was closed or left straight after an interstitial, without answering again. Watch this one when changing the ad frequency.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Out of lives', n: 1, v: r => pct(r.out_of_lives, r.games) },
+        { label: 'Left the app', n: 1, v: r => pct(r.left_app, r.games) }, { label: 'Left after an ad', n: 1, v: r => pct(r.left_after_ad, r.games) },
+        { label: 'Unknown', n: 1, v: r => pct(r.unknown_end, r.games) }], rows)}</div>
+    <div class="card"><h3>Ads during games</h3><p class="hint">Rewarded = "watch an ad to carry on" after running out of lives.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Interstitials per game', n: 1, v: r => r.games ? (r.interstitials / r.games).toFixed(2) : '–' },
+        { label: 'Games with one', n: 1, v: r => pct(r.games_with_ad, r.games) }, { label: 'Rewarded offered', n: 1, v: r => fmt(r.rewarded_offered) },
+        { label: 'Tapped', n: 1, v: r => pct(r.rewarded_tapped, r.rewarded_offered) }, { label: 'Carried on', n: 1, v: r => pct(r.rewarded_earned, r.rewarded_offered) }], rows)}</div>
+    <div class="card"><h3>Frequency test (A vs B)</h3><p class="hint">Runs while <code>interstitial_every_b</code> is set in <code>app_ad_config</code>: group B phones use that number, group A the normal one. Compare game length and "left after an ad".</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Group', v: r => r.ad_group + ' · every ' + fmt(adEvery(r.app, r.ad_group)) }, { label: 'Games', n: 1, v: r => fmt(r.games) },
+        { label: 'Avg rounds', n: 1, v: r => num(r.avg_rounds) }, { label: 'Median', n: 1, v: r => num(r.median_rounds) },
+        { label: 'Interstitials', n: 1, v: r => fmt(r.interstitials) }, { label: 'Left after an ad', n: 1, v: r => pct(r.left_after_ad, r.games) }], groups, 'No test running.')}</div>
+    <div class="card"><h3>Suggested interstitial setting</h3><p class="hint">About one interstitial per typical game, and never more often than every 3 minutes of play: the larger of the median game length and 3 minutes' worth of rounds, rounded to 5 (between 10 and 40). In Castle Eye this setting only applies on level 6; levels 1–5 show their interstitial when a level is completed.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Ads', v: r => esc(adMode(r.app)) }, { label: 'Now', n: 1, v: r => fmt(adEvery(r.app, 'A')) },
+        { label: 'Suggested', n: 1, v: r => suggestEvery(r) }], rows)}</div>
+  </div></section>`;
+}
+function adCfg(app){ return (state.games.ad_config || []).find(c => c.app === app) || {}; }
+function adEvery(app, group){ const c = adCfg(app); return group === 'B' && c.interstitial_every_b ? c.interstitial_every_b : c.interstitial_every; }
+function adMode(app){ const all = adCfg('all'), c = adCfg(app); return all.ad_mode === 'off' ? 'off (all apps)' : (c.ad_mode || 'off'); }
+function suggestEvery(r){
+  if (r.finished < MIN_GAMES_FOR_ADVICE) return `<span class="sub">needs ${MIN_GAMES_FOR_ADVICE - r.finished} more games</span>`;
+  const byTime = r.seconds_per_round ? 180 / r.seconds_per_round : 0;
+  const v = Math.max(10, Math.min(40, Math.round(Math.max(r.median_rounds || 0, byTime) / 5) * 5));
+  return fmt(v);
 }
 
 // ------------------------------------------------------------- detail
