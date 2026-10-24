@@ -186,7 +186,7 @@ const REFRESH_MS = 5 * 60 * 1000;
 
 const APPS = [
   { id: 'gallery', name: 'Gallery' }, { id: 'castle', name: 'Castle' }, { id: 'wing', name: 'Wing' },
-  { id: 'flag', name: 'Flag' }, { id: 'wine', name: 'Wine' }, { id: 'history', name: 'History' },
+  { id: 'flag', name: 'Flag' }, { id: 'wine', name: 'Wine' }, { id: 'history', name: 'Throne' },
 ];
 const appName = id => (APPS.find(a => a.id === id) || { name: id }).name;
 const appColour = id => `var(--${id})`;
@@ -310,7 +310,7 @@ const METRICS = {
   opens: { label: 'App opens', field: 'opens', ...sumMetric('opens'), allTime: () => sumOf(totals(), 'opens'),
     help: 'Launches, plus returns after 30+ minutes away.', extra: extraOpens },
   rounds: { label: 'Rounds played', field: 'rounds', ...sumMetric('rounds'), allTime: () => sumOf(totals(), 'rounds'),
-    help: 'Answers in the main game (Wine: wines played; History: monarchs played).', extra: extraRounds },
+    help: 'Answers in the main game (Wine: wines played; Throne: monarchs played).', extra: extraRounds },
   avg_time: { label: 'Avg time per open', field: 'seconds', unit: 'time',
     period: (p) => { const s = sumDays('seconds', ...periods()[p]), o = sumDays('opens', ...periods()[p]); return o ? s / o : null; },
     split: (p) => { const s = byAppDays('seconds', ...periods()[p]), o = byAppDays('opens', ...periods()[p]); const r = {}; APPS.forEach(a => r[a.id] = o[a.id] ? s[a.id] / o[a.id] : null); return r; },
