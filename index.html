@@ -2,9 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats</title>
+<title>Eye Suite Stats v0.2</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#15171b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Eye Stats">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
 /* Layout: a header bar with filters, three rows of tiles (Today / This week / All time),
    and a detail view that replaces the tiles when one is clicked. */
@@ -83,7 +90,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats</h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.2</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -91,7 +98,8 @@ footer{color:var(--soft);font-size:12px}
   </form>
 </div>
 <script>
-const GATE_HASH = '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86'; // sha-256 of the current password — regenerate with set-password.html
+//const GATE_HASH = '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86'; // sha-256 of the current password — regenerate with set-password.html
+const GATE_HASH = 'fd61a03af4f77d870fc21e05e7e80678095c92d808cfb3b5c279ee04c74aca13'; // sha-256 of the current password — regenerate with set-password.html
 const GATE_KEY = 'eyestats_unlocked_v1';
 (function(){
   var gate = document.getElementById('gate');
@@ -159,7 +167,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats</h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.2</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -606,6 +614,13 @@ if (METRICS[location.hash.slice(1)]) state.view = location.hash.slice(1);
 load();
 setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
 let resizeTimer; window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 200); });
+// Home-screen app: register the service worker (needs https, e.g. GitHub Pages;
+// skipped when the file is opened straight from the PC) and refresh the figures
+// whenever the app comes back to the front.
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 </script>
 </body>
 </html>
