@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.2</title>
+<title>Eye Suite Stats v0.3</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -75,6 +75,7 @@ th,td{text-align:left;padding:6px 10px 6px 0;border-top:1px solid var(--line);ve
 th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);font-weight:600}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;padding-right:0;padding-left:10px}
 td.n{white-space:nowrap}
+td:first-child{white-space:nowrap}
 .empty{color:var(--soft);font-size:13px;padding:6px 0}
 footer{color:var(--soft);font-size:12px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -90,7 +91,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.2</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.3</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -167,7 +168,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.2</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.3</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -189,6 +190,7 @@ const SUPABASE_URL = 'https://mvpviwcixhrswrpadtfj.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Vs0mr-szOBVSj6yGUGsnPA_3jBxk2xm';
 const DAYS = 90;
 const GAME_DAYS = 30;
+const FEATURE_DAYS = 30;
 const MIN_GAMES_FOR_ADVICE = 30;
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -237,6 +239,7 @@ async function load(){
     if (!res.ok) throw new Error('the database answered ' + res.status);
     state.data = await res.json();
     state.games = await loadGames();
+    state.features = await loadFeatures();
     setNotes('');
   } catch (e) {
     setNotes(`<div class="note err">Couldn't load the figures: ${esc(e.message)}. Check the connection and press Refresh.</div>`);
@@ -252,6 +255,18 @@ async function loadGames(){
       method: 'POST',
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_days: GAME_DAYS, p_include_tests: state.includeTests }),
+    });
+    return res.ok ? await res.json() : null;
+  } catch (e) { return null; }
+}
+// Features and cross-promotion (get_dashboard_features, dashboard v0.3).
+// Optional: until dashboard/get-dashboard-features.sql has been run, the panel says so.
+async function loadFeatures(){
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_dashboard_features`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_days: FEATURE_DAYS, p_include_tests: state.includeTests }),
     });
     return res.ok ? await res.json() : null;
   } catch (e) { return null; }
@@ -394,6 +409,7 @@ function render(){
     <section><h2>${row.title}</h2>${row.note ? `<p class="sub" style="margin:-4px 0 10px">${esc(row.note)}</p>` : ''}<div class="row">${row.keys.map(k => tileHtml(k, row, ri)).join('')}</div></section>`).join('');
   main.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openDetail(t.dataset.k)));
   main.insertAdjacentHTML('beforeend', gamesSection());
+  main.insertAdjacentHTML('beforeend', featuresSection());
   main.querySelectorAll('section').forEach(s => s.style.marginBottom = '22px');
 }
 function tileHtml(k, row){
@@ -459,6 +475,54 @@ function gamesSection(){
     <div class="card"><h3>Suggested interstitial setting</h3><p class="hint">About one interstitial per typical game, and never more often than every 3 minutes of play: the larger of the median game length and 3 minutes' worth of rounds, rounded to 5 (between 10 and 40). In Castle Eye this setting only applies on level 6; levels 1–5 show their interstitial when a level is completed.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Ads', v: r => esc(adMode(r.app)) }, { label: 'Now', n: 1, v: r => fmt(adEvery(r.app, 'A')) },
         { label: 'Suggested', n: 1, v: r => suggestEvery(r) }], rows)}</div>
+  </div></section>`;
+}
+// ------------------------------------------------------------- features and cross-promotion
+// Bonus (weekly) rounds, collection screens, carrying on after running out of
+// lives, taps on other Eye games, and installs that came from in-app links.
+const COLLECTION_NAMES = { gallery: 'My Collection', castle: 'My Realm', wing: 'Life List', wine: 'Cellar', history: 'Royal Gallery' };
+function installFrom(r){
+  if (r.source === 'cross_promo') return r.from_app ? `Suite link in ${appName(r.from_app)}` : `Suite link (${esc(r.medium || 'unknown')})`;
+  if (r.source === 'share') return `Shared card${r.medium ? ' · ' + esc(r.medium) : ''}`;
+  if (r.source === 'board_invite') return 'Friends-board invite';
+  return esc(r.source);
+}
+function featuresSection(){
+  const f = state.features;
+  const head = `<section><h2>Features and cross-promotion</h2><p class="sub" style="margin:-4px 0 10px">Last ${FEATURE_DAYS} days unless marked "all time". From the usage stats the apps already send, so only phones with usage stats on, and only from each app's usage-stats version.</p>`;
+  if (!f) return head + `<div class="card"><div class="empty">Not set up yet: run <code>dashboard/get-dashboard-features.sql</code> in Supabase's SQL Editor.</div></div></section>`;
+  const rows = f.apps.filter(inApp).sort((a, b) => APPS.findIndex(x => x.id === a.app) - APPS.findIndex(x => x.id === b.app));
+  const touches = r => state.app === 'all' || r.from_app === state.app || r.to_app === state.app;
+  const taps = f.taps.filter(touches), installs = f.installs.filter(touches);
+  const appTo = (a) => `<span style="white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${appColour(a)};margin-right:6px"></span>${appName(a)}</span>`;
+  const tapInstalls = r => f.installs.filter(i => i.source === 'cross_promo' && i.from_app === r.from_app && i.to_app === r.to_app).reduce((t, i) => t + i.players, 0);
+  const tapsByFrom = grouped(taps, r => r.from_app, ['players', 'opens', 'players_all']);
+  const adsOn = r => (r.ad_mode_all !== 'off') && r.ad_mode && r.ad_mode !== 'off';
+  const anyAdsOn = rows.some(adsOn);
+  return head + `<div class="detail" style="gap:12px">
+    <div class="card"><h3>Bonus rounds (this week's theme)</h3><p class="hint">Players who opened the weekly bonus round or answered in it. Flag Eye has no bonus round.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Players', n: 1, v: r => r.app === 'flag' ? '–' : fmt(r.bonus_players) },
+        { label: 'Of active', n: 1, v: r => r.app === 'flag' ? '–' : pct(r.bonus_players, r.active_players) },
+        { label: 'Opens', n: 1, v: r => r.app === 'flag' ? '–' : fmt(r.bonus_opens) }, { label: 'Answers', n: 1, v: r => r.app === 'flag' ? '–' : fmt(r.bonus_answers) },
+        { label: 'Players (all time)', n: 1, v: r => r.app === 'flag' ? '–' : fmt(r.bonus_players_all) }], rows)}</div>
+    <div class="card"><h3>Collections</h3><p class="hint">Players who opened their collection screen. How many items each player has collected is kept on the phone and isn't sent yet.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Screen', v: r => esc(COLLECTION_NAMES[r.app] || 'none') },
+        { label: 'Players', n: 1, v: r => r.coll_screen ? fmt(r.coll_players) : '–' }, { label: 'Of active', n: 1, v: r => r.coll_screen ? pct(r.coll_players, r.active_players) : '–' },
+        { label: 'Opens', n: 1, v: r => r.coll_screen ? fmt(r.coll_opens) : '–' }, { label: 'Players (all time)', n: 1, v: r => r.coll_screen ? fmt(r.coll_players_all) : '–' }], rows)}</div>
+    <div class="card"><h3>Carrying on after a streak ends</h3><p class="hint">When a player runs out of lives they're offered "watch an ad to carry on". ${anyAdsOn ? 'The offer only appears while that app\'s ads are on.' : '<b>Ads are off in every app, so the offer never appears and these stay at zero</b> until ads are switched on.'}</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Ads', v: r => adsOn(r) ? esc(r.ad_mode) : 'off' }, { label: 'Games', n: 1, v: r => fmt(r.games) },
+        { label: 'Ran out of lives', n: 1, v: r => fmt(r.ran_out) }, { label: 'Offered', n: 1, v: r => fmt(r.carry_offered) },
+        { label: 'Tapped', n: 1, v: r => pct(r.carry_tapped, r.carry_offered) }, { label: 'Carried on', n: 1, v: r => pct(r.carry_earned, r.carry_offered) },
+        { label: 'Games carried on', n: 1, v: r => fmt(r.games_carried_on) }], rows.filter(r => r.games || adsOn(r)), 'No games recorded in this period.')}</div>
+    <div class="card"><h3>Taps on other Eye games</h3><p class="hint">Taps on a game in Home's "More from the Eye Suite" row. Counted once per app open, so these are players and opens with a tap. Installs = players of the other game who arrived through that link (all time). Links on the level-complete panel aren't counted yet.</p>
+      ${table([{ label: 'From', v: r => appTo(r.from_app) }, { label: 'To', v: r => appTo(r.to_app) }, { label: 'Players', n: 1, v: r => fmt(r.players) },
+        { label: 'Opens with a tap', n: 1, v: r => fmt(r.opens) }, { label: 'Players (all time)', n: 1, v: r => fmt(r.players_all) },
+        { label: 'Installs', n: 1, v: r => fmt(tapInstalls(r)) }], taps, 'No taps yet.')}
+      ${tapsByFrom.length > 1 ? `<div style="margin-top:12px">${table([{ label: 'Tapped in', v: r => appTo(r.key) }, { label: 'Player taps', n: 1, v: r => fmt(r.players) },
+        { label: 'Opens with a tap', n: 1, v: r => fmt(r.opens) }], tapsByFrom.sort((a, b) => b.players - a.players))}</div>` : ''}</div>
+    <div class="card"><h3>Installs from in-app links</h3><p class="hint">New players whose Play install came through a link in one of the apps: the suite row, a shared score card or a friends-board invite. Play only passes this on for installs made through the link, after the app's usage-stats version.</p>
+      ${table([{ label: 'Installed', v: r => appTo(r.to_app) }, { label: 'Came from', v: installFrom }, { label: 'Players', n: 1, v: r => fmt(r.players) },
+        { label: `Last ${FEATURE_DAYS} days`, n: 1, v: r => fmt(r.players_recent) }, { label: 'Came back', n: 1, v: r => pct(r.came_back, r.players) }], installs, 'None yet.')}</div>
   </div></section>`;
 }
 function adCfg(app){ return (state.games.ad_config || []).find(c => c.app === app) || {}; }
