@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.5</title>
+<title>Eye Suite Stats v0.6</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -40,6 +40,10 @@ h1{font:italic 700 28px/1.1 var(--serif);margin:0}
 .chip .dot{width:9px;height:9px;border-radius:50%}
 .chip:focus-visible,.tile:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn{font:600 13px var(--sans);padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.tab{font:600 13px var(--sans);padding:9px 14px 8px;border:none;background:none;color:var(--soft);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab:hover{color:var(--ink)}
 label.toggle{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--soft);cursor:pointer}
 .note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);padding:10px 14px;font-size:13px;color:var(--soft);border-radius:4px}
 .err{border-left-color:var(--bad);color:var(--ink)}
@@ -91,7 +95,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.5</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.6</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -168,7 +172,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.5</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.6</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -178,6 +182,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
       <button class="btn" id="lock" type="button" title="Require the password again on this device">Lock</button>
     </div>
   </header>
+  <nav class="tabs" id="sectionTabs" aria-label="Dashboard section"></nav>
   <div id="notes"></div>
   <main id="main"></main>
   <footer>Figures exclude registered test devices unless ticked. Charts cover the last 90 days. Days are UK days; "this week" starts on Monday. Usage figures (players, opens, rounds) count from each app's usage-stats version: Gallery v5.16, Castle v1.19, Wing v2.16, Flag v1.12, Wine v0.34. Game figures count from Castle v1.21, Gallery v5.19, Wing v2.19, Flag v1.15 and Wine v0.36. Average rounds in "Versions and rounds" count only players who reported rounds.</footer>
@@ -202,11 +207,21 @@ const APPS = [
 const appName = id => (APPS.find(a => a.id === id) || { name: id }).name;
 const appColour = id => `var(--${id})`;
 
+// v0.6: the page used to render every section (Overview, Games and ads, Features
+// and cross-promotion, Versions and rounds) stacked on one long scroll. As the
+// dashboard grew that got unwieldy, so each now sits behind its own tab.
+const SECTIONS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'games', label: 'Games & ads' },
+  { id: 'features', label: 'Features' },
+  { id: 'versions', label: 'Versions' },
+];
+
 const store = {
   get(k, d){ try { const v = localStorage.getItem('eyestats_' + k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
   set(k, v){ try { localStorage.setItem('eyestats_' + k, JSON.stringify(v)); } catch(e){} },
 };
-let state = { app: store.get('app', 'all'), includeTests: store.get('incTests', false), view: null, data: null };
+let state = { app: store.get('app', 'all'), includeTests: store.get('incTests', false), section: store.get('section', 'overview'), view: null, data: null };
 
 const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '–' : Math.round(n).toLocaleString('en-GB');
 const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
@@ -417,15 +432,28 @@ function render(){
   const when = new Date(d.generated_at).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   document.getElementById('updated').textContent = `Updated ${when} · ${d.include_tests ? 'including' : 'excluding'} test devices`;
   renderChips();
+  renderSectionTabs();
   if (state.view) return renderDetail(state.view);
   const main = document.getElementById('main');
-  main.innerHTML = ROWS.map((row, ri) => `
-    <section><h2>${row.title}</h2>${row.note ? `<p class="sub" style="margin:-4px 0 10px">${esc(row.note)}</p>` : ''}<div class="row">${row.keys.map(k => tileHtml(k, row, ri)).join('')}</div></section>`).join('');
-  main.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openDetail(t.dataset.k)));
-  main.insertAdjacentHTML('beforeend', gamesSection());
-  main.insertAdjacentHTML('beforeend', featuresSection());
-  main.insertAdjacentHTML('beforeend', versionsSection());
+  if (state.section === 'games') { main.innerHTML = gamesSection(); }
+  else if (state.section === 'features') { main.innerHTML = featuresSection(); }
+  else if (state.section === 'versions') { main.innerHTML = versionsSection(); }
+  else {
+    main.innerHTML = ROWS.map((row, ri) => `
+      <section><h2>${row.title}</h2>${row.note ? `<p class="sub" style="margin:-4px 0 10px">${esc(row.note)}</p>` : ''}<div class="row">${row.keys.map(k => tileHtml(k, row, ri)).join('')}</div></section>`).join('');
+    main.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openDetail(t.dataset.k)));
+  }
   main.querySelectorAll('section').forEach(s => s.style.marginBottom = '22px');
+}
+function renderSectionTabs(){
+  const box = document.getElementById('sectionTabs');
+  box.innerHTML = SECTIONS.map(s =>
+    `<button class="tab" type="button" data-section="${s.id}" aria-pressed="${state.section === s.id}">${s.label}</button>`).join('');
+  box.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+    if (state.section === b.dataset.section) return;
+    state.section = b.dataset.section; store.set('section', state.section);
+    render(); window.scrollTo(0, 0);
+  }));
 }
 function tileHtml(k, row){
   const m = METRICS[k];
