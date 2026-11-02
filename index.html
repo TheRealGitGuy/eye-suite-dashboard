@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.7</title>
+<title>Eye Suite Stats v0.8</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -95,7 +95,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.7</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.8</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -172,7 +172,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.7</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.8</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -255,6 +255,7 @@ async function load(){
     if (!res.ok) throw new Error('the database answered ' + res.status);
     state.data = await res.json();
     state.games = await loadGames();
+    state.streakEnds = await loadStreakEnds();
     state.features = await loadFeatures();
     state.versions = await loadVersions();
     setNotes('');
@@ -278,6 +279,18 @@ async function loadGames(){
 }
 // Features and cross-promotion (get_dashboard_features, dashboard v0.3).
 // Optional: until dashboard/get-dashboard-features.sql has been run, the panel says so.
+// After a streak ends, with and without the rewarded offer (get_dashboard_streak_ends, v0.8).
+// Optional: until dashboard/get-dashboard-streak-ends.sql has been run, the card says so.
+async function loadStreakEnds(){
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_dashboard_streak_ends`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_days: GAME_DAYS, p_include_tests: state.includeTests }),
+    });
+    return res.ok ? await res.json() : null;
+  } catch (e) { return null; }
+}
 async function loadFeatures(){
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_dashboard_features`, {
@@ -510,6 +523,7 @@ function gamesSection(){
       ${table([{ label: 'App', v: appCell }, { label: 'Out of lives', n: 1, v: r => pct(r.out_of_lives, r.games) },
         { label: 'Left the app', n: 1, v: r => pct(r.left_app, r.games) }, { label: 'Left after an ad', n: 1, v: r => pct(r.left_after_ad, r.games) },
         { label: 'Unknown', n: 1, v: r => pct(r.unknown_end, r.games) }], rows)}</div>
+    ${streakEndsCard()}
     <div class="card"><h3>Ads during games</h3><p class="hint">Rewarded = "watch an ad to carry on" after running out of lives.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Interstitials per game', n: 1, v: r => r.games ? (r.interstitials / r.games).toFixed(2) : '–' },
         { label: 'Games with one', n: 1, v: r => pct(r.games_with_ad, r.games) }, { label: 'Rewarded offered', n: 1, v: r => fmt(r.rewarded_offered) },
@@ -618,6 +632,23 @@ function versionsSection(){
         { label: 'Avg rounds', n: 1, v: r => r.reported ? num(r.rounds / r.reported) : '–' }], vers, 'No players in this period.')}</div>
     ${charts}
   </div></section>`;
+}
+// What players do after a streak ends: played again in the same visit, left the
+// app (no more games that visit), or not known (the visit never sent its close).
+// Split by whether the "watch an ad" offer was showing, since not every streak
+// end gets one (ads off, the minimum-rounds gate, the ignored-offer back-off).
+function streakEndsCard(){
+  const se = state.streakEnds;
+  const head = `<div class="card"><h3>After a streak ends: with and without the ad offer</h3>`;
+  if (!se) return head + `<div class="empty">Not set up yet: run <code>dashboard/get-dashboard-streak-ends.sql</code> in Supabase's SQL Editor.</div></div>`;
+  const order = a => APPS.findIndex(x => x.id === a);
+  const rows = se.apps.filter(inApp).sort((a, b) => order(a.app) - order(b.app) || (b.offered - a.offered));
+  const share = (n, r) => `${fmt(n)} <span class="sub">${pct(n, r.ends)}</span>`;
+  return head + `<p class="hint">A streak end = a game that ran out of lives. <b>Offer shown</b> = the "watch an ad" button was showing and the player didn't carry on through it; not every streak end gets one (ads off, the minimum-rounds gate, the ignored-offer back-off). <b>Left the app</b> = no more games that visit and the app was closed (they may have looked at another screen first). <b>Not known</b> = the visit never sent its close (app killed, or still open). Compare "Left the app" between the two rows of each app.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Ad offer', v: r => r.offered ? '<b>Offer shown</b>' : 'No offer' },
+        { label: 'Streak ends', n: 1, v: r => fmt(r.ends) }, { label: 'Players', n: 1, v: r => fmt(r.players) },
+        { label: 'Played again', n: 1, v: r => share(r.played_on, r) }, { label: 'Left the app', n: 1, v: r => share(r.left_app, r) },
+        { label: 'Not known', n: 1, v: r => share(r.unknown, r) }, { label: 'Tapped the offer', n: 1, v: r => r.offered ? share(r.tapped, r) : '–' }], rows, 'No streak ends in this period.')}</div>`;
 }
 function adCfg(app){ return (state.games.ad_config || []).find(c => c.app === app) || {}; }
 function adEvery(app, group){ const c = adCfg(app); return group === 'B' && c.interstitial_every_b ? c.interstitial_every_b : c.interstitial_every; }
