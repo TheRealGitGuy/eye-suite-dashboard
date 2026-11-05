@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.9</title>
+<title>Eye Suite Stats v0.10</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -95,7 +95,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.9</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.10</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -172,7 +172,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.9</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.10</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -261,6 +261,7 @@ async function load(){
     state.offerGate = await loadRpc('get_dashboard_offer_gate', { p_days: GAME_DAYS, p_include_tests: state.includeTests });
     state.dayCache = {};   // v0.9: day drill-ins are fetched on demand
     state.features = await loadFeatures();
+    state.weeklyChallenge = await loadRpc('get_dashboard_weekly_challenge', { p_days: FEATURE_DAYS, p_include_tests: state.includeTests });
     state.versions = await loadVersions();
     setNotes('');
   } catch (e) {
@@ -588,6 +589,7 @@ function featuresSection(){
         { label: 'Of active', n: 1, v: r => r.app === 'flag' ? '–' : pct(r.bonus_players, r.active_players) },
         { label: 'Opens', n: 1, v: r => r.app === 'flag' ? '–' : fmt(r.bonus_opens) }, { label: 'Answers', n: 1, v: r => r.app === 'flag' ? '–' : fmt(r.bonus_answers) },
         { label: 'Players (all time)', n: 1, v: r => r.app === 'flag' ? '–' : fmt(r.bonus_players_all) }], rows)}</div>
+    ${weeklyChallengeCard()}
     <div class="card"><h3>Collections</h3><p class="hint">Players who opened their collection screen. How many items each player has collected is kept on the phone and isn't sent yet.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Screen', v: r => esc(COLLECTION_NAMES[r.app] || 'none') },
         { label: 'Players', n: 1, v: r => r.coll_screen ? fmt(r.coll_players) : '–' }, { label: 'Of active', n: 1, v: r => r.coll_screen ? pct(r.coll_players, r.active_players) : '–' },
@@ -653,6 +655,26 @@ function versionsSection(){
         { label: 'Avg rounds', n: 1, v: r => r.reported ? num(r.rounds / r.reported) : '–' }], vers, 'No players in this period.')}</div>
     ${charts}
   </div></section>`;
+}
+// ------------------------------------------------------------- weekly challenge reminder
+// How many players see the "remind me next week" sheet after completing the
+// week's 5-in-a-row badge, and how many opt in (get_dashboard_weekly_challenge,
+// dashboard v0.10). This shows the opt-in rate, not whether opting in actually
+// brings someone back to play next week - that needs a separate return-visit
+// signal, not yet built (see the to-do list).
+function weeklyChallengeCard(){
+  const w = state.weeklyChallenge;
+  const head = `<div class="card"><h3>Weekly challenge: "remind me next week"</h3>`;
+  if (!w) return head + `<div class="empty">Not set up yet: the <code>get_dashboard_weekly_challenge</code> function hasn't been created in Supabase.</div></div>`;
+  const order = a => APPS.findIndex(x => x.id === a);
+  const rows = w.apps.filter(inApp).sort((a, b) => order(a.app) - order(b.app));
+  return head + `<p class="hint">Shown once, right after a player completes the week's 5-in-a-row badge. Opt-in rate = opted in &divide; sheet shown. Doesn't yet show whether opting in actually brings someone back to play - only that they said yes to the reminder.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Badge completions', n: 1, v: r => fmt(r.completions) },
+        { label: 'Unique completers', n: 1, v: r => fmt(r.unique_completers) }, { label: 'Sheet shown', n: 1, v: r => fmt(r.sheets_shown) },
+        { label: 'Opted in', n: 1, v: r => `${fmt(r.reminder_opt_ins)} <span class="sub">${pct(r.reminder_opt_ins, r.sheets_shown)}</span>` },
+        { label: 'Actually scheduled', n: 1, v: r => pct(r.reminder_scheduled, r.reminder_opt_ins) },
+        { label: 'Declined', n: 1, v: r => `${fmt(r.reminder_declines)} <span class="sub">${pct(r.reminder_declines, r.sheets_shown)}</span>` }],
+        rows, 'No weekly badges completed in this period.')}</div>`;
 }
 // What players do after a streak ends: played again in the same visit, left the
 // app (no more games that visit), or not known (the visit never sent its close).
