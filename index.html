@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.11</title>
+<title>Eye Suite Stats v0.12</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -95,7 +95,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.11</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.12</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -172,7 +172,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.11</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.12</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -429,10 +429,10 @@ const METRICS = {
     help: 'Share of new players (last 60 days, before today) who opened the app again on a later day.', extra: extraActive },
   // Week-1 retention: only players who first opened at least 7 days ago can
   // have come back a week later, so younger players are left out of the %.
-  return_week: { label: 'Back after a week', field: 'new_players', unit: 'pct',
+  return_week: { label: 'Back day 7+', field: 'new_players', unit: 'pct',
     period: () => null, split: () => { const o = {}; APPS.forEach(a => { const r = weekCohorts().filter(x => x.app === a.id); o[a.id] = sumOf(r, 'new_players') ? 100 * sumOf(r, 'back_week_plus') / sumOf(r, 'new_players') : null; }); return o; },
     allTime: () => { const r = weekCohorts().filter(inApp); const n = sumOf(r, 'new_players'); return n ? 100 * sumOf(r, 'back_week_plus') / n : null; },
-    help: 'Share of new players who opened the app again a week or more after their first day (day 7 or later). Only players who first opened at least 7 days ago are counted, so recent players don\'t pull it down. Covers players who first opened in the last 60 days.', extra: extraActive },
+    help: 'Share of new players who opened the app again on day 7 or later after their first day. Only players who first opened at least 7 days ago are counted, so recent players don\'t pull it down. Covers players who first opened in the last 60 days.', extra: extraActive },
   played_1_plus: { label: 'Played 1+ round (ever)', field: 'played_1_plus', allTimeOnly: true,
     period: () => null,
     split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.played_1_plus); return o; },
@@ -888,7 +888,7 @@ function extraNewPlayers(){
 }
 function extraActive(){
   const ret = state.data.retention.filter(inApp);
-  const byDay = grouped(ret, r => r.cohort_day, ['new_players', 'back_day_1', 'back_day_7', 'back_week_plus', 'came_back']).sort((a, b) => a.key < b.key ? 1 : -1);
+  const byDay = grouped(ret, r => r.cohort_day, ['new_players', 'back_day_1', 'back_week_plus', 'came_back']).sort((a, b) => a.key < b.key ? 1 : -1);
   // A cohort can only be judged on day N once N days have passed; until then show '–'.
   const age = r => Math.round((new Date(state.data.today + 'T12:00:00Z') - new Date(r.key + 'T12:00:00Z')) / 864e5);
   const after = (r, f, n) => age(r) < n ? '<span title="Too soon to tell">–</span>' : `${fmt(r[f])} (${pct(r[f], r.new_players)})`;
@@ -896,8 +896,8 @@ function extraActive(){
   const lv = state.data.levels.filter(inApp);
   const levels = [...new Set(lv.map(r => r.level))].sort((a, b) => a - b).map(l => { const o = { day: l }; shownApps().forEach(a => { const r = lv.find(x => x.app === a && x.level === l); o[a] = r ? r.players : 0; }); return o; });
   return `<div class="grid2">
-    <div class="card"><h3>Do new players come back?</h3><p class="hint">Players grouped by the day they first opened an app. A dash means it's too soon to tell: next day fills in after a day, day 7 and a week+ after 7 days.${wkN ? ` <b>Back after a week: ${fmt(wkB)} of ${fmt(wkN)} players who first opened 7+ days ago (${pct(wkB, wkN)}).</b>` : ''}</p>
-      ${table([{ label: 'First opened', v: r => dayLabel(r.key) }, { label: 'New', n: 1, v: r => fmt(r.new_players) }, { label: 'Back next day', n: 1, v: r => after(r, 'back_day_1', 1) }, { label: 'Back on day 7', n: 1, v: r => after(r, 'back_day_7', 7) }, { label: 'Back a week+ later', n: 1, v: r => r.back_week_plus === undefined ? '–' : after(r, 'back_week_plus', 7) }, { label: 'Ever came back', n: 1, v: r => after(r, 'came_back', 1) }], byDay.slice(0, 30), 'No new players yet.')}</div>
+    <div class="card"><h3>Do new players come back?</h3><p class="hint">Players grouped by the day they first opened an app. A dash means it's too soon to tell: next day fills in after a day, day 7+ after 7 days.${wkN ? ` <b>Back day 7+: ${fmt(wkB)} of ${fmt(wkN)} players who first opened 7+ days ago (${pct(wkB, wkN)}).</b>` : ''}</p>
+      ${table([{ label: 'First opened', v: r => dayLabel(r.key) }, { label: 'New', n: 1, v: r => fmt(r.new_players) }, { label: 'Back next day', n: 1, v: r => after(r, 'back_day_1', 1) }, { label: 'Back day 7+', n: 1, v: r => r.back_week_plus === undefined ? '–' : after(r, 'back_week_plus', 7) }, { label: 'Ever came back', n: 1, v: r => after(r, 'came_back', 1) }], byDay.slice(0, 30), 'No new players yet.')}</div>
     <div class="card"><h3>Highest level reached (last 30 days)</h3><p class="hint">Each player counted once, at the highest level they reached.</p>
       ${levels.length ? barChart(levels, shownApps(), { xLabel: r => 'Level ' + r.day, every: 1 }) + legend(shownApps()) : '<div class="empty">Nothing yet.</div>'}</div>
   </div>`;
