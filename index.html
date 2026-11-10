@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.12</title>
+<title>Eye Suite Stats v0.13</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -74,6 +74,24 @@ h2{font:italic 700 19px var(--serif);margin:0 0 10px}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--soft);margin-top:6px}
 .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:middle}
 .tbl{overflow-x:auto}
+/* v0.13: first & last use matrix */
+.flctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;margin-bottom:12px}
+.flctl label{display:flex;flex-direction:column;gap:3px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);font-weight:600}
+.flctl input[type=date]{font:13px var(--sans);padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.flctl .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.flctl .seg button{font:600 12px var(--sans);padding:6px 10px;border:none;background:var(--panel);color:var(--soft);cursor:pointer}
+.flctl .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.flctl .range{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--soft);text-transform:none;letter-spacing:0;font-weight:400}
+table.mx{width:auto;font-size:12px;font-variant-numeric:tabular-nums}
+table.mx th,table.mx td{padding:5px 7px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+table.mx th{font-size:10.5px}
+table.mx th.rowh,table.mx td.rowh{text-align:left;position:sticky;left:0;background:var(--panel);z-index:1}
+table.mx td.nope{background:repeating-linear-gradient(135deg,transparent 0 4px,var(--hover) 4px 6px)}
+table.mx td.diag{outline:1px solid var(--accent);outline-offset:-1px}
+table.mx td.sum2,table.mx th.sum2{border-right:2px solid var(--line)}
+table.mx tr.tot td{font-weight:700;border-top:2px solid var(--line)}
+.mxkey{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--soft);margin-top:8px}
+.mxkey i{display:inline-block;width:12px;height:12px;vertical-align:-2px;margin-right:4px;border:1px solid var(--line)}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th,td{text-align:left;padding:6px 10px 6px 0;border-top:1px solid var(--line);vertical-align:top}
 th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);font-weight:600}
@@ -95,7 +113,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.12</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.13</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -172,7 +190,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.12</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.13</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -216,6 +234,7 @@ const SECTIONS = [
   { id: 'games', label: 'Games & ads' },
   { id: 'features', label: 'Features' },
   { id: 'versions', label: 'Versions' },
+  { id: 'firstlast', label: 'First & last use' },
 ];
 
 const store = {
@@ -263,6 +282,7 @@ async function load(){
     state.features = await loadFeatures();
     state.weeklyChallenge = await loadRpc('get_dashboard_weekly_challenge', { p_days: FEATURE_DAYS, p_include_tests: state.includeTests });
     state.versions = await loadVersions();
+    state.firstLast = await loadRpc('get_dashboard_first_last', { p_include_tests: state.includeTests });   // v0.13
     setNotes('');
   } catch (e) {
     setNotes(`<div class="note err">Couldn't load the figures: ${esc(e.message)}. Check the connection and press Refresh.</div>`);
@@ -464,6 +484,75 @@ const ROWS = [
   { title: 'Engagement', p: 'all', keys: ['played_1_plus', 'played_3_plus'],
     note: '"Engaged" (played 1+ round) is the threshold used to report conversions back to Google Ads for apps with ads-conversion tracking switched on.' },
 ];
+// ------------------------------------------------------------- first & last use (v0.13)
+// Players counted by when they first opened an app (rows) and when they last
+// opened it (columns), from get_dashboard_first_last. The diagonal is players
+// who never came back after their first day/week. Each app gives a phone its
+// own id, so this is per app (or all apps added up), not across games.
+const FL_DEFAULT = () => { const t = state.firstLast ? state.firstLast.today : state.data.today; return { firstFrom: addDays(weekStart(t), -7 * 7), firstTo: t, lastFrom: '', lastTo: '', group: 'week', mode: 'n' }; };
+function flState(){ if (!state.fl) state.fl = Object.assign(FL_DEFAULT(), store.get('fl', {})); return state.fl; }
+function weekStart(d){ const t = new Date(d + 'T12:00:00Z'); const dow = (t.getUTCDay() + 6) % 7; return addDays(d, -dow); }
+const flKey = (d, g) => g === 'week' ? weekStart(d) : d;
+const flLabel = (k, g) => g === 'week' ? 'w/c ' + dayLabel(k) : new Date(k + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 864e5);
+function firstLastSection(){
+  const F = state.firstLast;
+  const head = `<section><h2>First &amp; last use</h2><p class="sub" style="margin:-4px 0 10px">Each player counted once per app: the row is when they first opened it, the column when they last opened it. The outlined diagonal is players who haven't come back since their first ${flState().group === 'week' ? 'week' : 'day'}. Each app gives a phone its own id, so a player can't be followed from one game to another; "All apps" adds the apps up.</p>`;
+  if (!F) return head + `<div class="card"><div class="empty">Not set up yet: run <code>dashboard/get-dashboard-first-last.sql</code> in Supabase's SQL Editor.</div></div></section>`;
+  const st = flState(), g = st.group, today = F.today;
+  const cells = F.cells.filter(c => (state.app === 'all' || c.app === state.app)
+    && (!st.firstFrom || c.f >= st.firstFrom) && (!st.firstTo || c.f <= st.firstTo)
+    && (!st.lastFrom || c.l >= st.lastFrom) && (!st.lastTo || c.l <= st.lastTo));
+  const seg = (name, opts) => `<span class="seg" data-fl="${name}">${opts.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${st[name] === v}">${l}</button>`).join('')}</span>`;
+  const controls = `<div class="flctl">
+    <label>First used<span class="range"><input type="date" data-fl="firstFrom" value="${st.firstFrom}" max="${today}"> to <input type="date" data-fl="firstTo" value="${st.firstTo}" max="${today}"></span></label>
+    <label>Last used<span class="range"><input type="date" data-fl="lastFrom" value="${st.lastFrom}" max="${today}"> to <input type="date" data-fl="lastTo" value="${st.lastTo}" max="${today}"></span></label>
+    <label>Group by${seg('group', [['day', 'Day'], ['week', 'Week']])}</label>
+    <label>Show${seg('mode', [['n', 'Players'], ['pct', '% of row']])}</label>
+    <label>Quick<span class="seg" data-flquick><button type="button" data-q="4">4 weeks</button><button type="button" data-q="8">8 weeks</button><button type="button" data-q="all">All</button><button type="button" data-q="reset">Reset</button></span></label>
+  </div>`;
+  if (!cells.length) return head + `<div class="card">${controls}<div class="empty">No players match these dates.</div></div></section>`;
+  // rows and columns: every period from the first row to the last column
+  const rowKeys = [...new Set(cells.map(c => flKey(c.f, g)))].sort();
+  const lastMax = cells.reduce((m, c) => c.l > m ? c.l : m, '');
+  const colKeys = []; for (let k = rowKeys[0]; k <= flKey(lastMax, g); k = addDays(k, g === 'week' ? 7 : 1)) colKeys.push(k);
+  const tooWide = colKeys.length > 120;
+  const M = new Map(); let total = 0, oneDay = 0, spanSum = 0, recent = 0; const spans = [];
+  cells.forEach(c => { const rk = flKey(c.f, g), ck = flKey(c.l, g), key = rk + '|' + ck; M.set(key, (M.get(key) || 0) + c.n);
+    total += c.n; if (c.f === c.l) oneDay += c.n; const sp = daysBetween(c.f, c.l); spans.push([sp, c.n]); if (daysBetween(c.l, today) <= 6) recent += c.n; });
+  spans.sort((a, b) => a[0] - b[0]); let acc = 0, median = 0; for (const [sp, n] of spans) { acc += n; if (acc >= total / 2) { median = sp; break; } }
+  const rowTot = k => colKeys.reduce((t, c) => t + (M.get(k + '|' + c) || 0), 0);
+  const colTot = c => rowKeys.reduce((t, k) => t + (M.get(k + '|' + c) || 0), 0);
+  const shade = share => share ? `background:color-mix(in srgb, var(--accent) ${Math.round(8 + 52 * share)}%, transparent)` : '';
+  const cell = (k, c) => {
+    if (c < k) return `<td class="nope"></td>`;
+    const n = M.get(k + '|' + c) || 0, rt = rowTot(k), share = rt ? n / rt : 0;
+    const txt = !n ? '' : st.mode === 'pct' ? Math.round(100 * share) + '%' : fmt(n);
+    const tip = n ? `${fmt(n)} player${n === 1 ? '' : 's'} first used ${flLabel(k, g)}, last used ${flLabel(c, g)} (${Math.round(100 * share)}% of the row)` : '';
+    return `<td class="${c === k ? 'diag' : ''}" style="${shade(share)}" title="${esc(tip)}">${txt}</td>`;
+  };
+  const hdr = `<tr><th class="rowh">First used ↓ · Last used →</th><th>Players</th><th class="sum2">Came back later</th>${colKeys.map(c => `<th>${esc(flLabel(c, g))}</th>`).join('')}</tr>`;
+  const rows = rowKeys.map(k => { const rt = rowTot(k), same = M.get(k + '|' + k) || 0;
+    return `<tr><td class="rowh">${esc(flLabel(k, g))}</td><td><b>${fmt(rt)}</b></td><td class="sum2"><b>${pct(rt - same, rt)}</b></td>${colKeys.map(c => cell(k, c)).join('')}</tr>`; }).join('');
+  const tot = `<tr class="tot"><td class="rowh">Last used, all rows</td><td>${fmt(total)}</td><td class="sum2">${pct(total - rowKeys.reduce((t, k) => t + (M.get(k + '|' + k) || 0), 0), total)}</td>${colKeys.map(c => { const n = colTot(c); return `<td>${n ? (st.mode === 'pct' ? Math.round(100 * n / total) + '%' : fmt(n)) : ''}</td>`; }).join('')}</tr>`;
+  const summary = `<p class="hint"><b>${fmt(total)}</b> players. <b>${pct(oneDay, total)}</b> used the app on one day only; half stopped within <b>${median} day${median === 1 ? '' : 's'}</b> of their first open; <b>${pct(recent, total)}</b> last opened it in the past 7 days. "Came back later" = last used after the row's ${g === 'week' ? 'week' : 'day'}; the newest rows haven't had long to come back yet.</p>`;
+  const matrix = tooWide ? `<div class="empty">That's ${colKeys.length} columns. Narrow the dates or group by week.</div>`
+    : `<div class="tbl"><table class="mx">${hdr}${rows}${tot}</table></div>
+      <div class="mxkey"><span><i style="outline:1px solid var(--accent);outline-offset:-1px"></i>Didn't come back after that ${g === 'week' ? 'week' : 'day'}</span><span><i style="${shade(0.6)}"></i>Darker = bigger share of the row</span><span><i class="nope" style="background:repeating-linear-gradient(135deg,transparent 0 4px,var(--hover) 4px 6px)"></i>Not possible (last before first)</span></div>`;
+  return head + `<div class="card">${controls}${summary}${matrix}</div></section>`;
+}
+function wireFirstLast(){
+  const main = document.getElementById('main'), st = flState();
+  const save = () => { store.set('fl', st); render(); };
+  main.querySelectorAll('input[data-fl]').forEach(i => i.addEventListener('change', () => { st[i.dataset.fl] = i.value; save(); }));
+  main.querySelectorAll('.seg[data-fl] button').forEach(b => b.addEventListener('click', () => { st[b.parentNode.dataset.fl] = b.dataset.v; save(); }));
+  main.querySelectorAll('[data-flquick] button').forEach(b => b.addEventListener('click', () => {
+    const t = state.firstLast.today, q = b.dataset.q;
+    if (q === 'reset') Object.assign(st, FL_DEFAULT());
+    else { st.firstFrom = q === 'all' ? '' : addDays(weekStart(t), -7 * (Number(q) - 1)); st.firstTo = t; st.lastFrom = ''; st.lastTo = ''; }
+    save();
+  }));
+}
 function render(){
   const d = state.data; if (!d) return;
   const when = new Date(d.generated_at).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -476,6 +565,7 @@ function render(){
   else if (state.section === 'games') { main.innerHTML = gamesSection(); }
   else if (state.section === 'features') { main.innerHTML = featuresSection(); }
   else if (state.section === 'versions') { main.innerHTML = versionsSection(); }
+  else if (state.section === 'firstlast') { main.innerHTML = firstLastSection(); wireFirstLast(); }
   else {
     main.innerHTML = ROWS.map((row, ri) => `
       <section><h2>${row.title}</h2>${row.note ? `<p class="sub" style="margin:-4px 0 10px">${esc(row.note)}</p>` : ''}<div class="row">${row.keys.map(k => tileHtml(k, row, ri)).join('')}</div></section>`).join('');
