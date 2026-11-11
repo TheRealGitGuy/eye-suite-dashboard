@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.14</title>
+<title>Eye Suite Stats v0.15</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -113,7 +113,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.14</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.15</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -190,7 +190,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.14</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.15</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -508,7 +508,7 @@ function firstLastSection(){
     <label>First used<span class="range"><input type="date" data-fl="firstFrom" value="${st.firstFrom}" max="${today}"> to <input type="date" data-fl="firstTo" value="${st.firstTo}" max="${today}"></span></label>
     <label>Last used<span class="range"><input type="date" data-fl="lastFrom" value="${st.lastFrom}" max="${today}"> to <input type="date" data-fl="lastTo" value="${st.lastTo}" max="${today}"></span></label>
     <label>Group by${seg('group', [['day', 'Day'], ['week', 'Week']])}</label>
-    <label>Show${seg('mode', [['n', 'Players'], ['pct', '% of row']])}</label>
+    <label>Show${seg('mode', [['n', 'Players'], ['pct', '% of row'], ['rpp', 'Rounds per player'], ['r', 'Total rounds']])}</label>
     <label>Quick<span class="seg" data-flquick><button type="button" data-q="4">4 weeks</button><button type="button" data-q="8">8 weeks</button><button type="button" data-q="all">All</button><button type="button" data-q="reset">Reset</button></span></label>
   </div>`;
   if (!cells.length) return head + `<div class="card">${controls}<div class="empty">No players match these dates.</div></div></section>`;
@@ -517,28 +517,38 @@ function firstLastSection(){
   const lastMax = cells.reduce((m, c) => c.l > m ? c.l : m, '');
   const colKeys = []; for (let k = rowKeys[0]; k <= flKey(lastMax, g); k = addDays(k, g === 'week' ? 7 : 1)) colKeys.push(k);
   const tooWide = colKeys.length > 120;
-  const M = new Map(); let total = 0, oneDay = 0, spanSum = 0, recent = 0; const spans = [];
-  cells.forEach(c => { const rk = flKey(c.f, g), ck = flKey(c.l, g), key = rk + '|' + ck; M.set(key, (M.get(key) || 0) + c.n);
-    total += c.n; if (c.f === c.l) oneDay += c.n; const sp = daysBetween(c.f, c.l); spans.push([sp, c.n]); if (daysBetween(c.l, today) <= 6) recent += c.n; });
+  // v0.15: R holds the main-game rounds those players have played (all their opens)
+  const M = new Map(), R = new Map(); let total = 0, oneDay = 0, spanSum = 0, recent = 0, rounds = 0, oneDayRounds = 0; const spans = [];
+  cells.forEach(c => { const rk = flKey(c.f, g), ck = flKey(c.l, g), key = rk + '|' + ck, r = c.r || 0; M.set(key, (M.get(key) || 0) + c.n); R.set(key, (R.get(key) || 0) + r);
+    total += c.n; rounds += r; if (c.f === c.l) { oneDay += c.n; oneDayRounds += r; } const sp = daysBetween(c.f, c.l); spans.push([sp, c.n]); if (daysBetween(c.l, today) <= 6) recent += c.n; });
+  const roundsMode = st.mode === 'rpp' || st.mode === 'r';
+  const per = (r, n) => n ? (r / n < 10 ? (r / n).toFixed(1) : fmt(r / n)) : '–';
+  const rVal = key => { const n = M.get(key) || 0, r = R.get(key) || 0; return st.mode === 'rpp' ? (n ? r / n : 0) : r; };
+  const rMax = roundsMode ? Math.max(1, ...[...M.keys()].map(rVal)) : 1;
   spans.sort((a, b) => a[0] - b[0]); let acc = 0, median = 0; for (const [sp, n] of spans) { acc += n; if (acc >= total / 2) { median = sp; break; } }
   const rowTot = k => colKeys.reduce((t, c) => t + (M.get(k + '|' + c) || 0), 0);
   const colTot = c => rowKeys.reduce((t, k) => t + (M.get(k + '|' + c) || 0), 0);
   const shade = share => share ? `background:color-mix(in srgb, var(--accent) ${Math.round(8 + 52 * share)}%, transparent)` : '';
+  const rowRounds = k => colKeys.reduce((t, c) => t + (R.get(k + '|' + c) || 0), 0);
+  const colRounds = c => rowKeys.reduce((t, k) => t + (R.get(k + '|' + c) || 0), 0);
   const cell = (k, c) => {
     if (c < k) return `<td class="nope"></td>`;
-    const n = M.get(k + '|' + c) || 0, rt = rowTot(k), share = rt ? n / rt : 0;
-    const txt = !n ? '' : st.mode === 'pct' ? Math.round(100 * share) + '%' : fmt(n);
-    const tip = n ? `${fmt(n)} player${n === 1 ? '' : 's'} first used ${flLabel(k, g)}, last used ${flLabel(c, g)} (${Math.round(100 * share)}% of the row)` : '';
-    return `<td class="${c === k ? 'diag' : ''}" style="${shade(share)}" title="${esc(tip)}">${txt}</td>`;
+    const key = k + '|' + c, n = M.get(key) || 0, r = R.get(key) || 0, rt = rowTot(k), share = rt ? n / rt : 0;
+    const txt = !n ? '' : st.mode === 'pct' ? Math.round(100 * share) + '%' : st.mode === 'rpp' ? per(r, n) : st.mode === 'r' ? fmt(r) : fmt(n);
+    const tip = n ? `${fmt(n)} player${n === 1 ? '' : 's'} first used ${flLabel(k, g)}, last used ${flLabel(c, g)} (${Math.round(100 * share)}% of the row); ${fmt(r)} rounds, ${per(r, n)} per player` : '';
+    return `<td class="${c === k ? 'diag' : ''}" style="${shade(roundsMode ? rVal(key) / rMax : share)}" title="${esc(tip)}">${txt}</td>`;
   };
-  const hdr = `<tr><th class="rowh">First used ↓ · Last used →</th><th>Players</th><th class="sum2">Came back later</th>${colKeys.map(c => `<th>${esc(flLabel(c, g))}</th>`).join('')}</tr>`;
+  const rCol = roundsMode ? (st.mode === 'rpp' ? 'Rounds per player' : 'Rounds') : null;
+  const rCell = (r, n) => rCol ? `<td><b>${st.mode === 'rpp' ? per(r, n) : fmt(r)}</b></td>` : '';
+  const hdr = `<tr><th class="rowh">First used ↓ · Last used →</th><th>Players</th>${rCol ? `<th>${rCol}</th>` : ''}<th class="sum2">Came back later</th>${colKeys.map(c => `<th>${esc(flLabel(c, g))}</th>`).join('')}</tr>`;
   const rows = rowKeys.map(k => { const rt = rowTot(k), same = M.get(k + '|' + k) || 0;
-    return `<tr><td class="rowh">${esc(flLabel(k, g))}</td><td><b>${fmt(rt)}</b></td><td class="sum2"><b>${pct(rt - same, rt)}</b></td>${colKeys.map(c => cell(k, c)).join('')}</tr>`; }).join('');
-  const tot = `<tr class="tot"><td class="rowh">Last used, all rows</td><td>${fmt(total)}</td><td class="sum2">${pct(total - rowKeys.reduce((t, k) => t + (M.get(k + '|' + k) || 0), 0), total)}</td>${colKeys.map(c => { const n = colTot(c); return `<td>${n ? (st.mode === 'pct' ? Math.round(100 * n / total) + '%' : fmt(n)) : ''}</td>`; }).join('')}</tr>`;
-  const summary = `<p class="hint"><b>${fmt(total)}</b> players. <b>${pct(oneDay, total)}</b> used the app on one day only; half stopped within <b>${median} day${median === 1 ? '' : 's'}</b> of their first open; <b>${pct(recent, total)}</b> last opened it in the past 7 days. "Came back later" = last used after the row's ${g === 'week' ? 'week' : 'day'}; the newest rows haven't had long to come back yet.</p>`;
+    return `<tr><td class="rowh">${esc(flLabel(k, g))}</td><td><b>${fmt(rt)}</b></td>${rCell(rowRounds(k), rt)}<td class="sum2"><b>${pct(rt - same, rt)}</b></td>${colKeys.map(c => cell(k, c)).join('')}</tr>`; }).join('');
+  const tot = `<tr class="tot"><td class="rowh">Last used, all rows</td><td>${fmt(total)}</td>${rCol ? `<td>${st.mode === 'rpp' ? per(rounds, total) : fmt(rounds)}</td>` : ''}<td class="sum2">${pct(total - rowKeys.reduce((t, k) => t + (M.get(k + '|' + k) || 0), 0), total)}</td>${colKeys.map(c => { const n = colTot(c), r = colRounds(c); return `<td>${n ? (st.mode === 'pct' ? Math.round(100 * n / total) + '%' : st.mode === 'rpp' ? per(r, n) : st.mode === 'r' ? fmt(r) : fmt(n)) : ''}</td>`; }).join('')}</tr>`;
+  const summary = `<p class="hint"><b>${fmt(total)}</b> players. <b>${pct(oneDay, total)}</b> used the app on one day only; half stopped within <b>${median} day${median === 1 ? '' : 's'}</b> of their first open; <b>${pct(recent, total)}</b> last opened it in the past 7 days. "Came back later" = last used after the row's ${g === 'week' ? 'week' : 'day'}; the newest rows haven't had long to come back yet.</p>
+    <p class="hint">Rounds: players who came back after their first day played <b>${per(rounds - oneDayRounds, total - oneDay)}</b> rounds each, against <b>${per(oneDayRounds, oneDay)}</b> for players who only used the app on one day. Rounds are main-game answers over all of a player's opens.</p>`;
   const matrix = tooWide ? `<div class="empty">That's ${colKeys.length} columns. Narrow the dates or group by week.</div>`
     : `<div class="tbl"><table class="mx">${hdr}${rows}${tot}</table></div>
-      <div class="mxkey"><span><i style="outline:1px solid var(--accent);outline-offset:-1px"></i>Didn't come back after that ${g === 'week' ? 'week' : 'day'}</span><span><i style="${shade(0.6)}"></i>Darker = bigger share of the row</span><span><i class="nope" style="background:repeating-linear-gradient(135deg,transparent 0 4px,var(--hover) 4px 6px)"></i>Not possible (last before first)</span></div>`;
+      <div class="mxkey"><span><i style="outline:1px solid var(--accent);outline-offset:-1px"></i>Didn't come back after that ${g === 'week' ? 'week' : 'day'}</span><span><i style="${shade(0.6)}"></i>Darker = ${st.mode === 'rpp' ? 'more rounds per player' : st.mode === 'r' ? 'more rounds' : 'bigger share of the row'}</span><span><i class="nope" style="background:repeating-linear-gradient(135deg,transparent 0 4px,var(--hover) 4px 6px)"></i>Not possible (last before first)</span></div>`;
   return head + `<div class="card">${controls}${summary}${matrix}</div></section>`;
 }
 function wireFirstLast(){
