@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.18</title>
+<title>Eye Suite Stats v0.19</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -120,7 +120,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.18</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.19</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -197,7 +197,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.18</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.19</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -880,7 +880,7 @@ function featuresSection(){
         { label: 'Players', n: 1, v: r => fmt(r.players) }, { label: 'Of active', n: 1, v: r => pct(r.players, r.active_players) },
         { label: 'Opens with a tap', n: 1, v: r => fmt(r.opens) }, { label: 'Taps', n: 1, v: r => fmt(r.taps) },
         { label: 'Players (all time)', n: 1, v: r => fmt(r.players_all) }], tapsByFrom)}` : ''}</div>
-    <div class="card"><h3>Installs from in-app links</h3><p class="hint">New players whose Play install came through a link in one of the apps: the suite row, a shared score card or a friends-board invite. Play only passes this on for installs made through the link, after the app's usage-stats version.</p>
+    <div class="card"><h3>Installs from in-app links</h3><p class="hint">New players whose Play install came through a link in one of the apps: the suite row, a shared score card or a friends-board invite. Play only passes this on for installs made through the link, after the app's usage-stats version. <b>Came back</b> = opened the app again on a later UK day, the same rule as the rest of the dashboard.</p>
       ${table([{ label: 'Installed', v: r => appTo(r.to_app) }, { label: 'Came from', v: installFrom }, { label: 'Players', n: 1, v: r => fmt(r.players) },
         { label: `Last ${FEATURE_DAYS} days`, n: 1, v: r => fmt(r.players_recent) }, { label: 'Came back', n: 1, v: r => pct(r.came_back, r.players) }], installs, 'None yet.')}</div>
   </div></section>`;
@@ -1143,7 +1143,7 @@ function extraNewPlayers(){
   const loc = grouped(state.data.locales.filter(inApp), r => localeLabel(r.locale), ['players']).sort((a, b) => b.players - a.players).slice(0, 15);
   const ver = state.data.versions.filter(inApp);
   return `<div class="grid2">
-    <div class="card"><h3>Where players came from</h3><p class="hint">From the Play install referrer. Tagged links (utm_source=…) show up here by name.</p>
+    <div class="card"><h3>Where players came from</h3><p class="hint">From the Play install referrer. Tagged links (utm_source=…) show up here by name. Came back = opened the app again on a later UK day.</p>
       ${table([{ label: 'Source', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.players) }, { label: 'This week', n: 1, v: r => fmt(r.this_week) }, { label: 'Came back', n: 1, v: r => pct(r.came_back, r.players) }], src)}</div>
     <div class="card"><h3>Phone language / country</h3><p class="hint">The phone's language setting, not its location.</p>
       ${table([{ label: 'Setting', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.players) }], loc)}</div>
