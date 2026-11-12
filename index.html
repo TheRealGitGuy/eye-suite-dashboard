@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.20</title>
+<title>Eye Suite Stats v0.21</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -120,7 +120,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.20</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.21</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -197,7 +197,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.20</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.21</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -521,7 +521,7 @@ const flLabel = (k, g) => g === 'week' ? 'w/c ' + dayLabel(k) : new Date(k + 'T1
 const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 864e5);
 function firstLastSection(){
   const F = state.firstLast;
-  const head = `<section><h2>First &amp; last use</h2><p class="sub" style="margin:-4px 0 10px">Each player counted once per app: the row is when they first opened it. With Show = Players or % of row, the column is when they last opened it; with Rounds played or Rounds per player, the column is when the rounds were played. The outlined diagonal is players who haven't come back since their first ${flState().group === 'week' ? 'week' : 'day'}. Each app gives a phone its own id, so a player can't be followed from one game to another; "All apps" adds the apps up.</p>`;
+  const head = `<section><h2>First &amp; last use</h2><p class="sub" style="margin:-4px 0 10px">Each player counted once per app: the row is when they first opened it. With Show = Players or % of row, the column is when they last opened it; with Rounds played, Rounds per player or Ads shown, the column is when the rounds were played or the ads shown. The outlined diagonal is players who haven't come back since their first ${flState().group === 'week' ? 'week' : 'day'}. Each app gives a phone its own id, so a player can't be followed from one game to another; "All apps" adds the apps up.</p>`;
   if (!F) return head + `<div class="card"><div class="empty">Not set up yet: run <code>dashboard/get-dashboard-first-last.sql</code> in Supabase's SQL Editor.</div></div></section>`;
   const st = flState(), g = st.group, today = F.today;
   const cells = F.cells.filter(c => (state.app === 'all' || c.app === state.app)
@@ -532,7 +532,7 @@ function firstLastSection(){
     <label>First used<span class="range"><input type="date" data-fl="firstFrom" value="${st.firstFrom}" max="${today}"> to <input type="date" data-fl="firstTo" value="${st.firstTo}" max="${today}"></span></label>
     <label>Last used<span class="range"><input type="date" data-fl="lastFrom" value="${st.lastFrom}" max="${today}"> to <input type="date" data-fl="lastTo" value="${st.lastTo}" max="${today}"></span></label>
     <label>Group by${seg('group', [['day', 'Day'], ['week', 'Week']])}</label>
-    <label>Show${seg('mode', [['n', 'Players'], ['pct', '% of row'], ['r', 'Rounds played'], ['rpp', 'Rounds per player']])}</label>
+    <label>Show${seg('mode', [['n', 'Players'], ['pct', '% of row'], ['r', 'Rounds played'], ['rpp', 'Rounds per player'], ['ads', 'Ads shown']])}</label>
     <label>Quick<span class="seg" data-flquick><button type="button" data-q="4">4 weeks</button><button type="button" data-q="8">8 weeks</button><button type="button" data-q="all">All</button><button type="button" data-q="reset">Reset</button></span></label>
   </div>`;
   if (!cells.length) return head + `<div class="card">${controls}<div class="empty">No players match these dates.</div></div></section>`;
@@ -543,9 +543,9 @@ function firstLastSection(){
   const tooWide = colKeys.length > 120;
   // Players (last-used matrix): M holds players by first period | last period.
   // c.r (lifetime rounds per cell, v0.15) feeds the one-day vs came-back summary line.
-  const M = new Map(); let total = 0, oneDay = 0, recent = 0, rounds = 0, oneDayRounds = 0; const spans = [];
-  cells.forEach(c => { const rk = flKey(c.f, g), ck = flKey(c.l, g), key = rk + '|' + ck, r = c.r || 0; M.set(key, (M.get(key) || 0) + c.n);
-    total += c.n; rounds += r; if (c.f === c.l) { oneDay += c.n; oneDayRounds += r; } const sp = daysBetween(c.f, c.l); spans.push([sp, c.n]); if (daysBetween(c.l, today) <= 6) recent += c.n; });
+  const M = new Map(); let total = 0, oneDay = 0, recent = 0, rounds = 0, oneDayRounds = 0, ads = 0, oneDayAds = 0; const spans = [];
+  cells.forEach(c => { const rk = flKey(c.f, g), ck = flKey(c.l, g), key = rk + '|' + ck, r = c.r || 0, ad = c.ad || 0; M.set(key, (M.get(key) || 0) + c.n);
+    total += c.n; rounds += r; ads += ad; if (c.f === c.l) { oneDay += c.n; oneDayRounds += r; oneDayAds += ad; } const sp = daysBetween(c.f, c.l); spans.push([sp, c.n]); if (daysBetween(c.l, today) <= 6) recent += c.n; });
   spans.sort((a, b) => a[0] - b[0]); let acc = 0, median = 0; for (const [sp, n] of spans) { acc += n; if (acc >= total / 2) { median = sp; break; } }
   const rowTot = k => colKeys.reduce((t, c) => t + (M.get(k + '|' + c) || 0), 0);
   const colTot = c => rowKeys.reduce((t, k) => t + (M.get(k + '|' + c) || 0), 0);
@@ -554,52 +554,56 @@ function firstLastSection(){
   // v0.16 rounds views: rounds counted in the day/week they were PLAYED (act_day /
   // act_week from get_dashboard_first_last), not filed under the last-used period.
   // "Rounds per player" = rounds that period ÷ players who played that period.
-  const roundsMode = st.mode === 'rpp' || st.mode === 'r';
+  // v0.21: Ads shown uses the same played-in grid (ads counted in the period shown)
+  const adsMode = st.mode === 'ads';
+  const roundsMode = st.mode === 'rpp' || st.mode === 'r' || adsMode;
   const actSrc = F[g === 'week' ? 'act_week' : 'act_day'];
   if (roundsMode && !actSrc) return head + `<div class="card">${controls}<div class="empty">Rounds by week played needs the v0.16 <code>dashboard/get-dashboard-first-last.sql</code> run in Supabase.</div></div></section>`;
   const A = new Map(); let actMax = '';
   if (roundsMode) (actSrc || []).filter(c => (state.app === 'all' || c.app === state.app)
       && (!st.firstFrom || c.f >= st.firstFrom) && (!st.firstTo || c.f <= st.firstTo)
       && (!st.lastFrom || c.a >= flKey(st.lastFrom, g)) && (!st.lastTo || c.a <= st.lastTo))
-    .forEach(c => { const key = flKey(c.f, g) + '|' + c.a, o = A.get(key) || { n: 0, r: 0 }; o.n += c.n; o.r += c.r; A.set(key, o); if (c.a > actMax) actMax = c.a; });
+    .forEach(c => { const key = flKey(c.f, g) + '|' + c.a, o = A.get(key) || { n: 0, r: 0, ad: 0 }; o.n += c.n; o.r += c.r; o.ad += c.ad || 0; A.set(key, o); if (c.a > actMax) actMax = c.a; });
   const cols = roundsMode ? (() => { const out = []; const end = actMax > (colKeys[colKeys.length - 1] || '') ? actMax : colKeys[colKeys.length - 1];
       for (let k = rowKeys[0]; k <= end; k = addDays(k, g === 'week' ? 7 : 1)) out.push(k); return out; })() : colKeys;
-  const aGet = key => A.get(key) || { n: 0, r: 0 };
-  const aVal = o => st.mode === 'rpp' ? (o.n ? o.r / o.n : 0) : o.r;
+  const aGet = key => A.get(key) || { n: 0, r: 0, ad: 0 };
+  const aVal = o => adsMode ? o.ad : st.mode === 'rpp' ? (o.n ? o.r / o.n : 0) : o.r;
   const aMax = roundsMode ? Math.max(1, ...[...A.values()].map(aVal)) : 1;
-  const aTxt = o => !o.n ? '' : st.mode === 'rpp' ? per(o.r, o.n) : fmt(o.r);
+  const aTxt = o => adsMode ? (o.ad ? fmt(o.ad) : '') : !o.n ? '' : st.mode === 'rpp' ? per(o.r, o.n) : fmt(o.r);
   const cell = (k, c) => {
     if (c < k) return `<td class="nope"></td>`;
     if (roundsMode) { const o = aGet(k + '|' + c);
-      const tip = o.n ? `${fmt(o.n)} player${o.n === 1 ? '' : 's'} who first used ${flLabel(k, g)} played ${fmt(o.r)} rounds in ${flLabel(c, g)} (${per(o.r, o.n)} each)` : '';
+      const tip = o.n || o.ad ? `${fmt(o.n)} player${o.n === 1 ? '' : 's'} who first used ${flLabel(k, g)} played ${fmt(o.r)} rounds in ${flLabel(c, g)} (${per(o.r, o.n)} each) and were shown ${fmt(o.ad)} ad${o.ad === 1 ? '' : 's'}` : '';
       return `<td class="${c === k ? 'diag' : ''}" style="${shade(aVal(o) / aMax)}" title="${esc(tip)}">${aTxt(o)}</td>`; }
     const n = M.get(k + '|' + c) || 0, rt = rowTot(k), share = rt ? n / rt : 0;
     const txt = !n ? '' : st.mode === 'pct' ? Math.round(100 * share) + '%' : fmt(n);
     const tip = n ? `${fmt(n)} player${n === 1 ? '' : 's'} first used ${flLabel(k, g)}, last used ${flLabel(c, g)} (${Math.round(100 * share)}% of the row)` : '';
     return `<td class="${c === k ? 'diag' : ''}" style="${shade(share)}" title="${esc(tip)}">${txt}</td>`;
   };
-  const rowAct = k => cols.reduce((t, c) => { const o = aGet(k + '|' + c); t.n += o.n; t.r += o.r; return t; }, { n: 0, r: 0 });
-  const colAct = c => rowKeys.reduce((t, k) => { const o = aGet(k + '|' + c); t.n += o.n; t.r += o.r; return t; }, { n: 0, r: 0 });
-  const rCol = roundsMode ? (st.mode === 'rpp' ? 'Rounds per player' : 'Rounds') : null;
+  const rowAct = k => cols.reduce((t, c) => { const o = aGet(k + '|' + c); t.n += o.n; t.r += o.r; t.ad += o.ad; return t; }, { n: 0, r: 0, ad: 0 });
+  const colAct = c => rowKeys.reduce((t, k) => { const o = aGet(k + '|' + c); t.n += o.n; t.r += o.r; t.ad += o.ad; return t; }, { n: 0, r: 0, ad: 0 });
+  const rCol = roundsMode ? (adsMode ? 'Ads shown' : st.mode === 'rpp' ? 'Rounds per player' : 'Rounds') : null;
   // row total: all rounds the row played in the shown periods; per player = ÷ the row's players
-  const rCell = (k, rt) => { if (!rCol) return ''; const r = rowAct(k).r; return `<td><b>${st.mode === 'rpp' ? per(r, rt) : fmt(r)}</b></td>`; };
-  const corner = roundsMode ? 'First used ↓ · Played in →' : 'First used ↓ · Last used →';
+  const rCell = (k, rt) => { if (!rCol) return ''; const o = rowAct(k); return `<td><b>${adsMode ? fmt(o.ad) : st.mode === 'rpp' ? per(o.r, rt) : fmt(o.r)}</b></td>`; };
+  const corner = adsMode ? 'First used ↓ · Ads shown in →' : roundsMode ? 'First used ↓ · Played in →' : 'First used ↓ · Last used →';
   const hdr = `<tr><th class="rowh">${corner}</th><th>Players</th>${rCol ? `<th>${rCol}</th>` : ''}<th class="sum2">Came back later</th>${cols.map(c => `<th>${esc(flLabel(c, g))}</th>`).join('')}</tr>`;
   const rows = rowKeys.map(k => { const rt = rowTot(k), same = M.get(k + '|' + k) || 0;
     return `<tr><td class="rowh">${esc(flLabel(k, g))}</td><td><b>${fmt(rt)}</b></td>${rCell(k, rt)}<td class="sum2"><b>${pct(rt - same, rt)}</b></td>${cols.map(c => cell(k, c)).join('')}</tr>`; }).join('');
-  const allAct = rowKeys.reduce((t, k) => t + rowAct(k).r, 0);
-  const totLabel = roundsMode ? 'Played in, all rows' : 'Last used, all rows';
-  const tot = `<tr class="tot"><td class="rowh">${totLabel}</td><td>${fmt(total)}</td>${rCol ? `<td>${st.mode === 'rpp' ? per(allAct, total) : fmt(allAct)}</td>` : ''}<td class="sum2">${pct(total - rowKeys.reduce((t, k) => t + (M.get(k + '|' + k) || 0), 0), total)}</td>${cols.map(c => {
+  const allAct = rowKeys.reduce((t, k) => t + rowAct(k).r, 0), allAds = rowKeys.reduce((t, k) => t + rowAct(k).ad, 0);
+  const totLabel = adsMode ? 'Shown in, all rows' : roundsMode ? 'Played in, all rows' : 'Last used, all rows';
+  const tot = `<tr class="tot"><td class="rowh">${totLabel}</td><td>${fmt(total)}</td>${rCol ? `<td>${adsMode ? fmt(allAds) : st.mode === 'rpp' ? per(allAct, total) : fmt(allAct)}</td>` : ''}<td class="sum2">${pct(total - rowKeys.reduce((t, k) => t + (M.get(k + '|' + k) || 0), 0), total)}</td>${cols.map(c => {
       if (roundsMode) { const o = colAct(c); return `<td>${aTxt(o)}</td>`; }
       const n = colTot(c); return `<td>${n ? (st.mode === 'pct' ? Math.round(100 * n / total) + '%' : fmt(n)) : ''}</td>`; }).join('')}</tr>`;
   const unit = g === 'week' ? 'week' : 'day';
   const summary = `<p class="hint"><b>${fmt(total)}</b> players. <b>${pct(oneDay, total)}</b> used the app on one day only; half stopped within <b>${median} day${median === 1 ? '' : 's'}</b> of their first open; <b>${pct(recent, total)}</b> last opened it in the past 7 days. "Came back later" = last used after the row's ${unit}; the newest rows haven't had long to come back yet.</p>
-    <p class="hint">${roundsMode
+    <p class="hint">${adsMode
+      ? `Ads (interstitial and rewarded) are counted in the ${unit} they were shown. Players who came back after their first day were shown <b>${per(ads - oneDayAds, total - oneDay)}</b> ads each in total, against <b>${per(oneDayAds, oneDay)}</b> for players who only used the app on one day. Ads were switched on from early November, so earlier ${unit}s show none. Hover a cell for players, rounds and ads.`
+      : roundsMode
       ? `Rounds are counted in the ${unit} they were played. ${st.mode === 'rpp' ? `Each cell is that ${unit}'s rounds ÷ the players from that row who played that ${unit}; the Rounds per player column divides the row's rounds by all its players.` : `The Rounds column adds up the row's ${unit}s shown.`} Hover a cell for players and rounds.`
       : `Players who came back after their first day played <b>${per(rounds - oneDayRounds, total - oneDay)}</b> rounds each in total, against <b>${per(oneDayRounds, oneDay)}</b> for players who only used the app on one day. Switch Show to Rounds played or Rounds per player to see rounds by the ${unit} they were played.`}</p>`;
   const matrix = (tooWide || cols.length > 120) ? `<div class="empty">That's ${cols.length} columns. Narrow the dates or group by week.</div>`
     : `<div class="tbl"><table class="mx">${hdr}${rows}${tot}</table></div>
-      <div class="mxkey"><span><i style="outline:1px solid var(--accent);outline-offset:-1px"></i>${roundsMode ? `First ${unit} (the ${unit} they joined)` : `Didn't come back after that ${unit}`}</span><span><i style="${shade(0.6)}"></i>Darker = ${st.mode === 'rpp' ? 'more rounds per player' : st.mode === 'r' ? 'more rounds' : 'bigger share of the row'}</span><span><i class="nope" style="background:repeating-linear-gradient(135deg,transparent 0 4px,var(--hover) 4px 6px)"></i>Not possible (${roundsMode ? 'played' : 'last'} before first)</span></div>`;
+      <div class="mxkey"><span><i style="outline:1px solid var(--accent);outline-offset:-1px"></i>${roundsMode ? `First ${unit} (the ${unit} they joined)` : `Didn't come back after that ${unit}`}</span><span><i style="${shade(0.6)}"></i>Darker = ${adsMode ? 'more ads shown' : st.mode === 'rpp' ? 'more rounds per player' : st.mode === 'r' ? 'more rounds' : 'bigger share of the row'}</span><span><i class="nope" style="background:repeating-linear-gradient(135deg,transparent 0 4px,var(--hover) 4px 6px)"></i>Not possible (${adsMode ? 'shown' : roundsMode ? 'played' : 'last'} before first)</span></div>`;
   return head + `<div class="card">${controls}${summary}${matrix}</div></section>`;
 }
 function wireFirstLast(){
