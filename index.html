@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.16</title>
+<title>Eye Suite Stats v0.17</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -74,6 +74,13 @@ h2{font:italic 700 19px var(--serif);margin:0 0 10px}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--soft);margin-top:6px}
 .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:middle}
 .tbl{overflow-x:auto}
+/* v0.17: levels */
+.lvbar{display:inline-block;height:9px;border-radius:2px;background:var(--accent);vertical-align:middle;margin-right:6px}
+.lvcall{display:flex;flex-wrap:wrap;gap:8px 18px;margin:2px 0 12px;font-size:13px}
+.lvcall b{font-variant-numeric:tabular-nums}
+.lvwall{color:var(--bad);font-weight:700}
+.lvcard th,.lvcard td{padding-left:10px}
+.lvcard th:first-child,.lvcard td:first-child{padding-left:0}
 /* v0.13: first & last use matrix */
 .flctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;margin-bottom:12px}
 .flctl label{display:flex;flex-direction:column;gap:3px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);font-weight:600}
@@ -113,7 +120,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.16</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.17</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -190,7 +197,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.16</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.17</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -235,6 +242,7 @@ const SECTIONS = [
   { id: 'features', label: 'Features' },
   { id: 'versions', label: 'Versions' },
   { id: 'firstlast', label: 'First & last use' },
+  { id: 'levels', label: 'Levels' },
 ];
 
 const store = {
@@ -283,6 +291,7 @@ async function load(){
     state.weeklyChallenge = await loadRpc('get_dashboard_weekly_challenge', { p_days: FEATURE_DAYS, p_include_tests: state.includeTests });
     state.versions = await loadVersions();
     state.firstLast = await loadRpc('get_dashboard_first_last', { p_include_tests: state.includeTests });   // v0.13
+    state.levels = await loadLevels();   // v0.17
     setNotes('');
   } catch (e) {
     setNotes(`<div class="note err">Couldn't load the figures: ${esc(e.message)}. Check the connection and press Refresh.</div>`);
@@ -605,6 +614,116 @@ function wireFirstLast(){
     save();
   }));
 }
+// ------------------------------------------------------------- levels (v0.17)
+// Each app's level ladder, copied from its index.html (LEVELS) -- update here if
+// a ladder changes: name, correct answers needed to pass the level in one
+// attempt (toComplete), and what makes it harder. Lives: every level starts with
+// app_lives_config.max_lives (2 today); Gallery/Castle/Wing add 1 while the
+// player holds that week's bonus badge; Flag adds per-level bonus pennants.
+// The final level repeats, so it is never "passed".
+const LADDERS = {
+  gallery: { src: 'Gallery Eye v5.33', bonus: 'weekly', levels: [
+    ['First Visit', 8, 'Best-known paintings · easy decoys'], ['Regular Visitor', 10, 'Best-known + mid · half hard decoys'],
+    ['Season Ticket Holder', 16, 'Mid-fame · 85% hard decoys'], ['Gallery Guide', 18, 'Mid + least-known · 90% hard decoys'],
+    ['Curator', 12, 'Least-known · all hard decoys'], ['Gallery Master', 14, 'Least-known · all hard · repeats']] },
+  castle: { src: 'Castle Eye v1.34', bonus: 'weekly', levels: [
+    ['Day Tripper', 14, 'Best-known castles · easy decoys'], ["Squire's Errand", 18, 'Best-known + mid · half hard decoys'],
+    ['Wandering Knight', 18, 'Mid-fame · 85% hard decoys'], ["Baron's Envoy", 22, 'Mid + least-known · 90% hard decoys'],
+    ['Castellan', 20, 'Least-known · all hard decoys'], ['Master of the Keep', 24, 'Least-known · all hard · repeats']] },
+  wing: { src: 'Wing Eye v2.32', bonus: 'weekly', levels: [
+    ['Backyard Birder', 14, 'Best-known birds · easy decoys'], ['Weekend Birdwatcher', 18, 'Best-known + mid · half hard decoys'],
+    ['Field Naturalist', 18, 'Mid-fame · 85% hard decoys'], ['Migration Tracker', 22, 'Mid + least-known · 90% hard decoys'],
+    ['Bird Bander', 20, 'Least-known · all hard decoys'], ['Master Birder', 24, 'Least-known · all hard · repeats']] },
+  flag: { src: 'Flag Eye v1.24', bonus: [0, 0, 0, 1, 2, 3, 1, 1, 2, 2, 3, 4, 2, 2, 3, 3, 4, 5], levels: [
+    ['Flag Waver', 14, 'Famous flags, easy cuts'], ['Flag Bearer', 16, 'More flags, a few lookalikes'], ['Flag Spotter', 18, 'Harder flags creep in'],
+    ['Flag Tracker', 20, 'Mostly scattered pieces'], ['Flag Specialist', 22, 'Lookalikes, often six choices'], ['Flag Master', 24, 'Six choices · completes Bronze'],
+    ['Silver Waver', 16, 'Tier-3 flags, six choices'], ['Silver Bearer', 18, 'Tighter lookalikes'], ['Silver Spotter', 18, 'Zone rounds appear'],
+    ['Silver Tracker', 20, 'More zone rounds'], ['Silver Specialist', 22, '3-flag mashups begin'], ['Silver Master', 24, 'Mashups · completes Silver'],
+    ['Gold Waver', 18, 'Hardest pool, mashups'], ['Gold Bearer', 20, 'Zone rounds and mashups'], ['Gold Spotter', 20, 'Spot-the-altered-flag begins'],
+    ['Gold Tracker', 22, 'Maximum decoy closeness'], ['Gold Specialist', 24, 'Every mechanic in rotation'], ['Gold Master', 26, 'Six choices · repeats']] },
+};
+async function loadLevels(){
+  const st = lvState();
+  return loadRpc('get_dashboard_levels', { p_include_tests: state.includeTests, p_from: st.from || null, p_to: st.to || null });
+}
+function lvState(){ if (!state.lv) state.lv = Object.assign({ from: '', to: '' }, store.get('lv', {})); return state.lv; }
+function levelsSection(){
+  const L = state.levels, st = lvState();
+  const head = `<section><h2>Levels</h2><p class="sub" style="margin:-4px 0 10px">How far players get up each app's level ladder, where they get stuck and how long it takes. To pass a level a player needs its number of correct answers in one attempt; a wrong answer costs a life, and a wrong answer with no lives left ends the attempt (they start the level again). From each app's levels version onwards; test devices left out unless ticked.</p>`;
+  if (!L) return head + `<div class="card"><div class="empty">Not set up yet: run <code>dashboard/get-dashboard-levels.sql</code> in Supabase's SQL Editor.</div></div></section>`;
+  const today = L.today;
+  const controls = `<div class="card" style="margin-bottom:12px"><div class="flctl" style="margin:0">
+    <label>Games and opens between<span class="range"><input type="date" data-lv="from" value="${st.from}" max="${today}"> to <input type="date" data-lv="to" value="${st.to}" max="${today}"></span></label>
+    <label>Quick<span class="seg" data-lvquick><button type="button" data-q="7">7 days</button><button type="button" data-q="28">4 weeks</button><button type="button" data-q="all">All</button></span></label>
+  </div><p class="hint" style="margin:8px 0 0">The dates limit attempts, time-to-reach and the weekly trend. "Highest level" is always each player's highest level ever.</p></div>`;
+  const livesBase = a => { const r = L.lives.find(x => x.app === a); return r ? r.max_lives : 2; };
+  const apps = APPS.map(a => a.id).filter(a => state.app === 'all' || a === state.app);
+  const cards = apps.map(a => {
+    const lad = LADDERS[a], reached = L.reached.filter(r => r.app === a), att = L.attempts.filter(r => r.app === a), spd = L.speed.filter(r => r.app === a);
+    const players = sumOf(reached, 'players');
+    if (!players && !att.length) return `<div class="card"><h3>${appCell({ app: a })}</h3><div class="empty">No level data from real players yet${a === 'wine' || a === 'history' ? ' (so far only test phones have played it; tick "Include test devices" to see those)' : ''}.</div></div>`;
+    const maxSeen = Math.max(0, ...reached.map(r => r.level), ...att.map(r => r.level));
+    const n = Math.max(lad ? Math.min(lad.levels.length, Math.max(6, maxSeen + 1)) : 0, maxSeen);
+    const atLeast = lv => reached.filter(r => r.level >= lv).reduce((t, r) => t + r.players, 0);
+    const finalLv = lad ? lad.levels.length : null;
+    const rows = Array.from({ length: n }, (_, i) => {
+      const lv = i + 1, d = lad && lad.levels[i], at = att.find(r => r.level === lv) || {}, sp = spd.find(r => r.level === lv) || {};
+      const passFail = (at.completed || 0) + (at.failed || 0);
+      const lives = livesBase(a) + (lad && Array.isArray(lad.bonus) ? (lad.bonus[i] || 0) : 0);
+      return { lv, name: d ? d[0] : 'Level ' + lv, need: d ? d[1] : null, what: d ? d[2] : '', lives, weeklyBonus: lad && lad.bonus === 'weekly',
+        reach: atLeast(lv), top: (reached.find(r => r.level === lv) || {}).players || 0,
+        attempts: at.attempts || 0, completed: at.completed || 0, failed: at.failed || 0, left: at.left_app || 0, tried: at.players || 0, passers: at.players_completed || 0,
+        passRate: passFail ? at.completed / passFail : null, isFinal: lv === finalLv, medRounds: sp.median_rounds, medDays: sp.median_days };
+    });
+    // the wall: lowest pass rate among non-final levels with enough attempts
+    const cands = rows.filter(r => !r.isFinal && (r.completed + r.failed) >= 10 && r.passRate !== null);
+    const wall = cands.length ? cands.reduce((m, r) => r.passRate < m.passRate ? r : m) : null;
+    const topLv = Math.max(0, ...reached.map(r => r.level));
+    const call = `<div class="lvcall"><span><b>${fmt(players)}</b> players with level data</span>
+      <span>Reached level 2: <b>${pct(atLeast(2), players)}</b></span><span>Level 3: <b>${pct(atLeast(3), players)}</b></span>
+      <span>Level 6: <b>${pct(atLeast(6), players)}</b></span><span>Highest anyone: <b>level ${topLv}</b></span>
+      ${wall ? `<span class="lvwall">Hardest level: ${wall.lv} ${esc(wall.name)}, ${fmt(wall.completed)} of ${fmt(wall.completed + wall.failed)} attempts passed (${pct(wall.completed, wall.completed + wall.failed)})</span>` : ''}</div>`;
+    const bar = r => `<span class="lvbar" style="width:${Math.round(60 * (players ? r.reach / players : 0))}px"></span>${fmt(r.reach)} <span style="color:var(--soft)">(${pct(r.reach, players)})</span>`;
+    const tbl = table([
+      { label: 'Level', v: r => `${r.lv} ${esc(r.name)}${r.isFinal ? ' <span style="color:var(--soft)">(repeats)</span>' : ''}` },
+      { label: 'To pass', n: 1, v: r => r.need ? fmt(r.need) + ' right' : '–' },
+      { label: 'Lives', n: 1, v: r => r.lives + (r.weeklyBonus ? '<span title="+1 while holding the weekly badge" style="color:var(--soft)"> (+1)</span>' : '') },
+      { label: 'Got this far (ever)', v: bar },
+      { label: 'Stopped here', n: 1, v: r => fmt(r.top) },
+      { label: 'Attempts', n: 1, v: r => fmt(r.attempts) },
+      { label: 'Passed', n: 1, v: r => r.isFinal ? '–' : fmt(r.completed) },
+      { label: 'Ran out of lives', n: 1, v: r => fmt(r.failed) },
+      { label: 'Left mid-level', n: 1, v: r => fmt(r.left) },
+      { label: 'Pass rate', n: 1, v: r => r.isFinal ? '–' : (r.passRate === null ? '–' : `<span class="${wall && r.lv === wall.lv ? 'lvwall' : ''}">${Math.round(100 * r.passRate)}%</span>`) },
+      { label: 'Tries per pass', n: 1, v: r => r.isFinal || !r.completed ? '–' : ((r.completed + r.failed) / r.completed).toFixed(1) },
+      { label: 'Rounds to get here', n: 1, v: r => r.medRounds === undefined || r.medRounds === null ? '–' : `<span title="Median ${fmt(r.medDays)} day${r.medDays === 1 ? '' : 's'} after first opening the app">${fmt(r.medRounds)}</span>` },
+      { label: 'What changes', v: r => `<span style="color:var(--soft)">${esc(r.what)}</span>` },
+    ], rows);
+    return `<div class="card lvcard"><h3>${appCell({ app: a })}${lad ? ` <span style="font-weight:400;color:var(--soft)">· ladder from ${lad.src}</span>` : ''}</h3>${call}${tbl}</div>`;
+  }).join('');
+  // weekly trend
+  const wk = L.weekly.filter(r => apps.includes(r.app));
+  const weeks = [...new Set(wk.map(r => r.week))].sort().reverse();
+  const trendRows = weeks.flatMap(w => apps.map(a => wk.find(r => r.week === w && r.app === a)).filter(Boolean).map(r => ({ ...r, first: r.app === apps.find(a => wk.some(x => x.week === w && x.app === a)) })));
+  const trend = `<div class="card lvcard"><h3>Week by week</h3><p class="hint">Players active that week (on a build with levels), the average of their highest level that week, how many were on level 3 or above, and the level-ups in that week's games. A rising average level means players are getting further; level-ups per game show how often a run gets through a level.</p>
+    ${table([{ label: 'Week from', v: r => r.first ? dayLabel(r.week) : '' }, { label: 'App', v: appCell },
+      { label: 'Active players', n: 1, v: r => fmt(r.active) }, { label: 'Average level', n: 1, v: r => r.avg_level === null || r.avg_level === undefined ? '–' : Number(r.avg_level).toFixed(1) },
+      { label: 'On level 3+', n: 1, v: r => r.on_3_plus === null || r.on_3_plus === undefined ? '–' : `${fmt(r.on_3_plus)} (${pct(r.on_3_plus, r.active)})` },
+      { label: 'Games', n: 1, v: r => fmt(r.games) }, { label: 'Level-ups', n: 1, v: r => fmt(r.level_ups) },
+      { label: 'Level-ups per game', n: 1, v: r => r.games ? (r.level_ups / r.games).toFixed(2) : '–' },
+      { label: 'Players who levelled up', n: 1, v: r => fmt(r.players_levelling) }], trendRows, 'No weeks in this period.')}</div>`;
+  const notes = `<div class="card"><p class="hint" style="margin:0">How these are counted: <b>Got this far</b> = players whose highest level ever is this level or above. <b>Stopped here</b> = players whose highest level is exactly this one. <b>Attempts</b> come from game runs: a run that starts on level 2 and ends on level 4 made attempts at 2, 3 and 4, passed 2 and 3, and its attempt at 4 ended when the player ran out of lives or left the app. <b>Pass rate</b> = passed ÷ (passed + ran out of lives). <b>Rounds to get here</b> = median rounds played (all opens) by the time the player was first on that level; hover for the median days since their first open (nearly always 0: players who level up do it on their first day). Each app's last level repeats, so it is never "passed".</p></div>`;
+  return head + controls + `<div class="detail" style="gap:12px">${cards}${trend}${notes}</div></section>`;
+}
+function wireLevels(){
+  const main = document.getElementById('main'), st = lvState();
+  const reload = async () => { store.set('lv', st); state.levels = await loadLevels(); render(); };
+  main.querySelectorAll('input[data-lv]').forEach(i => i.addEventListener('change', () => { st[i.dataset.lv] = i.value; reload(); }));
+  main.querySelectorAll('[data-lvquick] button').forEach(b => b.addEventListener('click', () => {
+    const t = state.levels ? state.levels.today : state.data.today, q = b.dataset.q;
+    st.from = q === 'all' ? '' : addDays(t, -(Number(q) - 1)); st.to = ''; reload();
+  }));
+}
 function render(){
   const d = state.data; if (!d) return;
   const when = new Date(d.generated_at).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -618,6 +737,7 @@ function render(){
   else if (state.section === 'features') { main.innerHTML = featuresSection(); }
   else if (state.section === 'versions') { main.innerHTML = versionsSection(); }
   else if (state.section === 'firstlast') { main.innerHTML = firstLastSection(); wireFirstLast(); }
+  else if (state.section === 'levels') { main.innerHTML = levelsSection(); wireLevels(); }
   else {
     main.innerHTML = ROWS.map((row, ri) => `
       <section><h2>${row.title}</h2>${row.note ? `<p class="sub" style="margin:-4px 0 10px">${esc(row.note)}</p>` : ''}<div class="row">${row.keys.map(k => tileHtml(k, row, ri)).join('')}</div></section>`).join('');
