@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.17</title>
+<title>Eye Suite Stats v0.18</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -120,7 +120,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.17</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.18</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -197,7 +197,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.17</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.18</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -652,10 +652,13 @@ function levelsSection(){
   const head = `<section><h2>Levels</h2><p class="sub" style="margin:-4px 0 10px">How far players get up each app's level ladder, where they get stuck and how long it takes. To pass a level a player needs its number of correct answers in one attempt; a wrong answer costs a life, and a wrong answer with no lives left ends the attempt (they start the level again). From each app's levels version onwards; test devices left out unless ticked.</p>`;
   if (!L) return head + `<div class="card"><div class="empty">Not set up yet: run <code>dashboard/get-dashboard-levels.sql</code> in Supabase's SQL Editor.</div></div></section>`;
   const today = L.today;
+  // v0.18: show which period is applied, and light up the matching quick button
+  const quickOn = q => q === 'all' ? (!st.from && !st.to) : (!st.to && st.from === addDays(today, -(Number(q) - 1)));
+  const periodText = !st.from && !st.to ? 'all dates' : `${st.from ? dayLabel(st.from) : 'the start'} to ${st.to ? dayLabel(st.to) : 'today'}`;
   const controls = `<div class="card" style="margin-bottom:12px"><div class="flctl" style="margin:0">
-    <label>Games and opens between<span class="range"><input type="date" data-lv="from" value="${st.from}" max="${today}"> to <input type="date" data-lv="to" value="${st.to}" max="${today}"></span></label>
-    <label>Quick<span class="seg" data-lvquick><button type="button" data-q="7">7 days</button><button type="button" data-q="28">4 weeks</button><button type="button" data-q="all">All</button></span></label>
-  </div><p class="hint" style="margin:8px 0 0">The dates limit attempts, time-to-reach and the weekly trend. "Highest level" is always each player's highest level ever.</p></div>`;
+    <label>Period<span class="range"><input type="date" data-lv="from" value="${st.from}" max="${today}"> to <input type="date" data-lv="to" value="${st.to}" max="${today}"></span></label>
+    <label>Quick<span class="seg" data-lvquick>${[['7', '7 days'], ['28', '4 weeks'], ['all', 'All']].map(([q, l]) => `<button type="button" data-q="${q}" aria-pressed="${quickOn(q)}">${l}</button>`).join('')}</span></label>
+  </div><p class="hint" style="margin:8px 0 0">Showing <b>${esc(periodText)}</b>. Everything below follows these dates: players who opened the app in the period (by the highest level they'd reached by its end), attempts and passes in the period's games, rounds to reach each level for players who got there in the period, and the weekly trend.</p></div>`;
   const livesBase = a => { const r = L.lives.find(x => x.app === a); return r ? r.max_lives : 2; };
   const apps = APPS.map(a => a.id).filter(a => state.app === 'all' || a === state.app);
   const cards = apps.map(a => {
@@ -679,7 +682,7 @@ function levelsSection(){
     const cands = rows.filter(r => !r.isFinal && (r.completed + r.failed) >= 10 && r.passRate !== null);
     const wall = cands.length ? cands.reduce((m, r) => r.passRate < m.passRate ? r : m) : null;
     const topLv = Math.max(0, ...reached.map(r => r.level));
-    const call = `<div class="lvcall"><span><b>${fmt(players)}</b> players with level data</span>
+    const call = `<div class="lvcall"><span><b>${fmt(players)}</b> players${st.from || st.to ? ' in this period' : ' with level data'}</span>
       <span>Reached level 2: <b>${pct(atLeast(2), players)}</b></span><span>Level 3: <b>${pct(atLeast(3), players)}</b></span>
       <span>Level 6: <b>${pct(atLeast(6), players)}</b></span><span>Highest anyone: <b>level ${topLv}</b></span>
       ${wall ? `<span class="lvwall">Hardest level: ${wall.lv} ${esc(wall.name)}, ${fmt(wall.completed)} of ${fmt(wall.completed + wall.failed)} attempts passed (${pct(wall.completed, wall.completed + wall.failed)})</span>` : ''}</div>`;
@@ -688,7 +691,7 @@ function levelsSection(){
       { label: 'Level', v: r => `${r.lv} ${esc(r.name)}${r.isFinal ? ' <span style="color:var(--soft)">(repeats)</span>' : ''}` },
       { label: 'To pass', n: 1, v: r => r.need ? fmt(r.need) + ' right' : '–' },
       { label: 'Lives', n: 1, v: r => r.lives + (r.weeklyBonus ? '<span title="+1 while holding the weekly badge" style="color:var(--soft)"> (+1)</span>' : '') },
-      { label: 'Got this far (ever)', v: bar },
+      { label: 'Got this far', v: bar },
       { label: 'Stopped here', n: 1, v: r => fmt(r.top) },
       { label: 'Attempts', n: 1, v: r => fmt(r.attempts) },
       { label: 'Passed', n: 1, v: r => r.isFinal ? '–' : fmt(r.completed) },
@@ -712,7 +715,7 @@ function levelsSection(){
       { label: 'Games', n: 1, v: r => fmt(r.games) }, { label: 'Level-ups', n: 1, v: r => fmt(r.level_ups) },
       { label: 'Level-ups per game', n: 1, v: r => r.games ? (r.level_ups / r.games).toFixed(2) : '–' },
       { label: 'Players who levelled up', n: 1, v: r => fmt(r.players_levelling) }], trendRows, 'No weeks in this period.')}</div>`;
-  const notes = `<div class="card"><p class="hint" style="margin:0">How these are counted: <b>Got this far</b> = players whose highest level ever is this level or above. <b>Stopped here</b> = players whose highest level is exactly this one. <b>Attempts</b> come from game runs: a run that starts on level 2 and ends on level 4 made attempts at 2, 3 and 4, passed 2 and 3, and its attempt at 4 ended when the player ran out of lives or left the app. <b>Pass rate</b> = passed ÷ (passed + ran out of lives). <b>Rounds to get here</b> = median rounds played (all opens) by the time the player was first on that level; hover for the median days since their first open (nearly always 0: players who level up do it on their first day). Each app's last level repeats, so it is never "passed".</p></div>`;
+  const notes = `<div class="card"><p class="hint" style="margin:0">How these are counted: <b>Got this far</b> = players who opened the app in the period and had reached this level or above by its end. <b>Stopped here</b> = those whose highest level by then is exactly this one. <b>Attempts</b> come from game runs: a run that starts on level 2 and ends on level 4 made attempts at 2, 3 and 4, passed 2 and 3, and its attempt at 4 ended when the player ran out of lives or left the app. <b>Pass rate</b> = passed ÷ (passed + ran out of lives). <b>Rounds to get here</b> = median rounds played (all opens) by the time the player was first on that level; hover for the median days since their first open (nearly always 0: players who level up do it on their first day). Each app's last level repeats, so it is never "passed".</p></div>`;
   return head + controls + `<div class="detail" style="gap:12px">${cards}${trend}${notes}</div></section>`;
 }
 function wireLevels(){
