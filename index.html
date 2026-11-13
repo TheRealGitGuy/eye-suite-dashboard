@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.22</title>
+<title>Eye Suite Stats v0.23</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -18,7 +18,7 @@
 :root{
   --bg:#f3f1ec; --panel:#ffffff; --ink:#1f2328; --soft:#5d6470; --line:#dedad2; --hover:#f7f5f0;
   --accent:#8a5a14; --bad:#b4442f; --good:#2f7d4f;
-  --gallery:#b8862b; --castle:#56698a; --wing:#3c8a57; --flag:#c0453b; --wine:#8a2f55; --history:#6a4fb0;
+  --gallery:#b8862b; --castle:#56698a; --wing:#3c8a57; --flag:#c0453b; --wine:#8a2f55; --history:#6a4fb0; --mash:#d6407f;
   --serif: Georgia, "Times New Roman", serif;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
@@ -26,7 +26,7 @@
 @media (prefers-color-scheme: dark){
   :root{ --bg:#15171b; --panel:#1e2127; --ink:#e8e6e1; --soft:#a1a7b1; --line:#30343c; --hover:#262a31;
          --accent:#e0b866; --bad:#e2795f; --good:#6cc391;
-         --gallery:#d9a646; --castle:#8ea3c6; --wing:#64b884; --flag:#e0675c; --wine:#c9668f; --history:#a58ae6; color-scheme: dark; }
+         --gallery:#d9a646; --castle:#8ea3c6; --wing:#64b884; --flag:#e0675c; --wine:#c9668f; --history:#a58ae6; --mash:#ff7ab0; color-scheme: dark; }
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
@@ -120,7 +120,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.22</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.23</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -197,7 +197,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.22</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.23</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -228,6 +228,7 @@ const REFRESH_MS = 5 * 60 * 1000;
 const APPS = [
   { id: 'gallery', name: 'Gallery' }, { id: 'castle', name: 'Castle' }, { id: 'wing', name: 'Wing' },
   { id: 'flag', name: 'Flag' }, { id: 'wine', name: 'Wine' }, { id: 'history', name: 'Throne' },
+  { id: 'mash', name: 'Mash' },
 ];
 const appName = id => (APPS.find(a => a.id === id) || { name: id }).name;
 const appColour = id => `var(--${id})`;
@@ -839,7 +840,7 @@ function gamesSection(){
 // ------------------------------------------------------------- features and cross-promotion
 // Bonus (weekly) rounds, collection screens, carrying on after running out of
 // lives, taps on other Eye games, and installs that came from in-app links.
-const COLLECTION_NAMES = { gallery: 'My Collection', castle: 'My Realm', wing: 'Life List', flag: 'My Atlas', wine: 'Cellar', history: 'Royal Gallery' };
+const COLLECTION_NAMES = { gallery: 'My Collection', castle: 'My Realm', wing: 'Life List', flag: 'My Atlas', wine: 'Cellar', history: 'Royal Gallery', mash: 'Junk Drawer' };
 function installFrom(r){
   if (r.source === 'cross_promo') return r.from_app ? `Suite link in ${appName(r.from_app)}` : `Suite link (${esc(r.medium || 'unknown')})`;
   if (r.source === 'share') return `Shared card${r.medium ? ' · ' + esc(r.medium) : ''}`;
