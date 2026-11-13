@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.21</title>
+<title>Eye Suite Stats v0.22</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -120,7 +120,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.21</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.22</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -197,7 +197,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.21</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.22</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -597,7 +597,7 @@ function firstLastSection(){
   const unit = g === 'week' ? 'week' : 'day';
   const summary = `<p class="hint"><b>${fmt(total)}</b> players. <b>${pct(oneDay, total)}</b> used the app on one day only; half stopped within <b>${median} day${median === 1 ? '' : 's'}</b> of their first open; <b>${pct(recent, total)}</b> last opened it in the past 7 days. "Came back later" = last used after the row's ${unit}; the newest rows haven't had long to come back yet.</p>
     <p class="hint">${adsMode
-      ? `Ads (interstitial and rewarded) are counted in the ${unit} they were shown. Players who came back after their first day were shown <b>${per(ads - oneDayAds, total - oneDay)}</b> ads each in total, against <b>${per(oneDayAds, oneDay)}</b> for players who only used the app on one day. Ads were switched on from early November, so earlier ${unit}s show none. Hover a cell for players, rounds and ads.`
+      ? `Ads (interstitial and rewarded) come from the ad log, the same count as the "Ads shown" tile, and are counted in the ${unit} they were shown. Players who came back after their first day were shown <b>${per(ads - oneDayAds, total - oneDay)}</b> ads each in total, against <b>${per(oneDayAds, oneDay)}</b> for players who only used the app on one day. Ads were switched on from early November, so earlier ${unit}s show none. Hover a cell for players, rounds and ads.`
       : roundsMode
       ? `Rounds are counted in the ${unit} they were played. ${st.mode === 'rpp' ? `Each cell is that ${unit}'s rounds ÷ the players from that row who played that ${unit}; the Rounds per player column divides the row's rounds by all its players.` : `The Rounds column adds up the row's ${unit}s shown.`} Hover a cell for players and rounds.`
       : `Players who came back after their first day played <b>${per(rounds - oneDayRounds, total - oneDay)}</b> rounds each in total, against <b>${per(oneDayRounds, oneDay)}</b> for players who only used the app on one day. Switch Show to Rounds played or Rounds per player to see rounds by the ${unit} they were played.`}</p>`;
@@ -1198,11 +1198,13 @@ function extraOpens(){
 function extraRounds(){
   const t = state.data.totals.filter(inApp);
   const last30 = periods().last30;
-  const wk = byAppDays('weekly_rounds', ...last30), ads = byAppDays('ads_shown', ...last30);
+  // v0.22: ads from the ad log (ad_log_shown), the same count as the "Ads shown" tile.
+  // The session counter (ads_shown) missed ads in sessions whose end never arrived.
+  const wk = byAppDays('weekly_rounds', ...last30), ads = byAppDays('ad_log_shown', ...last30);
   return `<div class="grid2">
     <div class="card"><h3>How well players do (all time)</h3>
       ${table([{ label: 'App', v: appCell }, { label: 'Rounds', n: 1, v: r => fmt(r.rounds) }, { label: 'Correct', n: 1, v: r => pct(r.correct, r.rounds) }, { label: 'Rounds per open', n: 1, v: r => r.opens ? (r.rounds / r.opens).toFixed(1) : '–' }], t)}</div>
-    <div class="card"><h3>Weekly round and ads (last 30 days)</h3>
+    <div class="card"><h3>Weekly round and ads (last 30 days)</h3><p class="hint">Ads shown come from the ad log, the same count as the "Ads shown" tile.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Weekly-round answers', n: 1, v: r => fmt(wk[r.app]) }, { label: 'Ads shown', n: 1, v: r => fmt(ads[r.app]) }], t)}</div>
   </div>`;
 }

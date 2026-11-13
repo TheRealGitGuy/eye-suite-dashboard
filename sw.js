@@ -2,7 +2,7 @@
 // open without signal: the page itself is fetched fresh when online and served
 // from cache when offline. Database calls (Supabase) are never cached, so the
 // figures are always live or clearly missing.
-const CACHE = 'eyestats-v0.21';
+const CACHE = 'eyestats-v0.22';
 const SHELL = ['./', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/favicon-32.png'];
 
