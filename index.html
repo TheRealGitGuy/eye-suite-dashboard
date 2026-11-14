@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.23</title>
+<title>Eye Suite Stats v0.24</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -120,7 +120,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.23</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.24</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -197,7 +197,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.23</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.24</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -255,6 +255,8 @@ let state = { app: store.get('app', 'all'), includeTests: store.get('incTests', 
 const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '–' : Math.round(n).toLocaleString('en-GB');
 const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
 const mins = s => s ? (s / 60 < 10 ? (s / 60).toFixed(1) : Math.round(s / 60)) + ' min' : '–';
+// v0.24: total play time -- minutes under an hour, then hours
+const dur = s => !s ? '0 min' : s < 3600 ? Math.round(s / 60) + ' min' : (s / 3600 < 10 ? (s / 3600).toFixed(1) : fmt(s / 3600)) + ' h';
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const dayLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
@@ -422,6 +424,8 @@ const METRICS = {
     help: 'Launches, plus returns after 30+ minutes away.', extra: extraOpens },
   rounds: { label: 'Rounds played', field: 'rounds', ...sumMetric('rounds'), allTime: () => sumOf(totals(), 'rounds'),
     help: 'Answers in the main game (Wine: wines played; Throne: monarchs played).', extra: extraRounds },
+  play_time: { label: 'Play time', field: 'seconds', unit: 'dur', ...sumMetric('seconds'), allTime: () => sumOf(totals(), 'seconds'),
+    help: 'Total time the apps were on screen, added up over all opens. Comes from each open\'s tally, which is only sent when the app goes to the background, so opens closed with the Back button are missing (about a quarter of opens since 1 Nov, until the app fix ships).', extra: extraOpens },
   avg_time: { label: 'Avg time per open', field: 'seconds', unit: 'time',
     period: (p) => { const s = sumDays('seconds', ...periods()[p]), o = sumDays('opens', ...periods()[p]); return o ? s / o : null; },
     split: (p) => { const s = byAppDays('seconds', ...periods()[p]), o = byAppDays('opens', ...periods()[p]); const r = {}; APPS.forEach(a => r[a.id] = o[a.id] ? s[a.id] / o[a.id] : null); return r; },
@@ -481,13 +485,13 @@ function allTimeSplit(m){
   APPS.forEach(a => { state.app = a.id; o[a.id] = m.allTime(); });
   state.app = keep; return o;
 }
-const show = (m, v) => v === null || v === undefined ? '–' : m.unit === 'time' ? mins(v) : m.unit === 'pct' ? Math.round(v) + '%' : fmt(v);
+const show = (m, v) => v === null || v === undefined ? '–' : m.unit === 'time' ? mins(v) : m.unit === 'dur' ? dur(v) : m.unit === 'pct' ? Math.round(v) + '%' : fmt(v);
 
 // ------------------------------------------------------------- overview
 const ROWS = [
-  { title: 'Today', p: 'today', cmp: 'yesterday', cmpLabel: 'yesterday', keys: ['new_players', 'active_players', 'opens', 'rounds'] },
-  { title: 'This week', p: 'week', cmp: 'lastWeek', cmpLabel: 'same days last week', keys: ['new_players', 'active_players', 'opens', 'rounds', 'avg_time'] },
-  { title: 'All time', p: 'all', keys: ['new_players', 'leaderboard', 'boards', 'return_rate', 'return_week'],
+  { title: 'Today', p: 'today', cmp: 'yesterday', cmpLabel: 'yesterday', keys: ['new_players', 'active_players', 'opens', 'rounds', 'play_time'] },
+  { title: 'This week', p: 'week', cmp: 'lastWeek', cmpLabel: 'same days last week', keys: ['new_players', 'active_players', 'opens', 'rounds', 'play_time', 'avg_time'] },
+  { title: 'All time', p: 'all', keys: ['new_players', 'play_time', 'leaderboard', 'boards', 'return_rate', 'return_week'],
     labels: { new_players: 'Players seen', return_rate: 'Came back after day 1' } },
   { title: 'Ad log', p: 'all', keys: ['ad_devices', 'ad_launches', 'ad_shown', 'ad_failures'],
     note: 'From the ad log (ad_events): app launches with ads on, and ads loaded, shown or failed. Ads ran in testing 23 Sep to 8 Oct, were off until 2 Nov, and are on in Castle, Gallery, Wing and Flag since then (Flag on real ad units from v1.20, 8 Nov). New players get no interstitials on their first day.' },
