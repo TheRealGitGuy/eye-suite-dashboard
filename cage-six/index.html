@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1f2636">
+<meta name="description" content="20,000 graded 6x6 KenKen-style cage puzzles. Works offline.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Cage Six v0.5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,800&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f4efe4;--card:#fffdf8;--ink:#1f2636;--muted:#717788;--line:#ddd4c2;--sel:#ffe49a;--peer:#f6eedc;--same:#fff2c9;--bad:#c23a2b;--ans:#2b4f9e;
+  --easy:#2e8b57;--mild:#2f6db5;--hard:#d0771f;--super:#ad2f52;--acc:var(--easy)}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+.app{max-width:500px;margin:0 auto;padding:12px 14px 48px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.brand{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:26px;letter-spacing:-.5px;display:flex;align-items:baseline;gap:8px}
+.brand small{font-family:'DM Sans',system-ui,sans-serif;font-weight:700;font-size:11px;background:var(--ink);color:var(--paper);padding:2px 7px;border-radius:20px;letter-spacing:.3px}
+nav{display:flex;gap:4px}
+nav button{border:0;background:transparent;font:600 13px 'DM Sans',system-ui,sans-serif;color:var(--muted);padding:7px 9px;border-radius:8px;cursor:pointer}
+nav button.on{background:var(--ink);color:var(--paper)}
+.levels{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 12px}
+.levels button{border:2px solid transparent;background:var(--card);border-radius:12px;padding:8px 4px 7px;cursor:pointer;font:700 14px 'DM Sans',system-ui,sans-serif;color:var(--ink);box-shadow:0 1px 0 var(--line)}
+.levels button span{display:block;font:500 10.5px 'DM Sans',system-ui,sans-serif;color:var(--muted);margin-top:2px}
+.levels button i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.levels button.on{border-color:var(--c)}
+.bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.pz{display:flex;align-items:center;gap:4px}
+.pz b{font:700 16px 'DM Sans',system-ui,sans-serif;min-width:96px;text-align:center;cursor:pointer;padding:6px 4px;border-radius:8px}
+.pz b:hover{background:var(--card)}
+.ic{border:0;background:var(--card);width:34px;height:34px;border-radius:10px;font:700 16px 'DM Sans',system-ui,sans-serif;cursor:pointer;color:var(--ink);box-shadow:0 1px 0 var(--line)}
+.timer{display:flex;align-items:center;gap:6px;font:700 17px 'DM Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{position:relative}
+.board{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(6,minmax(0,1fr));aspect-ratio:1;width:100%;background:var(--card);border:3px solid var(--ink);border-radius:6px;overflow:hidden;touch-action:manipulation}
+.cell{position:relative;overflow:hidden;min-height:0;display:flex;align-items:center;justify-content:center;font-size:clamp(22px,7.2vw,34px);font-weight:500;cursor:pointer;user-select:none;-webkit-user-select:none}
+.cell.peer{background:var(--peer)}
+.cell.same{background:var(--same)}
+.cell.sel{background:var(--sel)}
+.cell .v{position:relative;z-index:1;top:8%;line-height:1;font-size:clamp(27px,8.6vw,41px);font-weight:700;color:var(--ans);letter-spacing:-.5px}
+.cell.hint .v{color:var(--acc);font-style:italic}
+.cell.bad .v{color:var(--bad)}
+.cell.wrong{background:#f6cfc7!important}
+.cell.right{background:#cfecd6!important}
+.cell.right .v{color:#1e6b3c}.cell.wrong .v{color:var(--bad)}
+.lbl{position:absolute;top:2px;left:4px;font-size:clamp(12px,3.6vw,17px);font-weight:700;z-index:2;letter-spacing:-.2px}
+.lbl.bad{color:var(--bad)}
+.notes{position:absolute;left:2px;right:2px;bottom:2px;top:33%;display:grid;grid-template-columns:repeat(3,1fr);font-size:clamp(11px,3.4vw,15.5px);font-weight:700;color:var(--muted);text-align:center;align-content:center;line-height:1.15}
+.cover{position:absolute;inset:0;background:var(--card);border:3px solid var(--ink);border-radius:6px;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:600 15px 'DM Sans',system-ui,sans-serif;color:var(--muted);text-align:center;padding:20px}
+.cover.show{display:flex}
+.pad{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:14px}
+.pad button{height:54px;border:0;border-radius:12px;background:var(--ink);color:var(--paper);font:700 23px 'DM Sans',system-ui,sans-serif;cursor:pointer}
+.pad.notesmode button{background:var(--card);color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+.tools{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:8px}
+.tools button{border:0;background:var(--card);border-radius:11px;padding:8px 2px 6px;font:600 11px 'DM Sans',system-ui,sans-serif;color:var(--ink);cursor:pointer;box-shadow:0 1px 0 var(--line)}
+.tools button em{display:block;font-style:normal;font-size:18px;line-height:1.2}
+.tools button.on{background:var(--acc);color:#fff}
+.tip{font-size:12px;color:var(--muted);text-align:center;margin-top:12px}
+.btn{border:0;background:var(--ink);color:var(--paper);font:700 14px 'DM Sans',system-ui,sans-serif;padding:11px 18px;border-radius:11px;cursor:pointer}
+.btn.alt{background:var(--card);color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+.btn.danger{background:var(--bad)}
+.view{display:none}.view.show{display:block}
+.card{background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 0 var(--line)}
+.card h3{font-family:'Fraunces',Georgia,serif;font-size:18px;margin:0 0 8px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{background:var(--paper);border-radius:10px;padding:9px 8px;text-align:center}
+.kpi b{display:block;font-size:19px}
+.kpi span{font-size:11px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 4px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+th{font-size:11px;color:var(--muted);font-weight:600}
+.prog{height:7px;background:var(--paper);border-radius:9px;overflow:hidden;margin:3px 0 9px}
+.prog div{height:100%;border-radius:9px}
+.how p,.how li{font-size:14px;line-height:1.55}
+.how ol{padding-left:20px;margin:6px 0}
+.how code{background:var(--paper);padding:1px 5px;border-radius:5px;font-size:12.5px}
+.chip{display:inline-block;padding:1px 8px;border-radius:20px;color:#fff;font-size:12px;font-weight:700}
+.modal{position:fixed;inset:0;background:rgba(20,24,34,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal.show{display:flex}
+.mbox{background:var(--card);border-radius:18px;padding:22px 20px 18px;width:100%;max-width:360px;text-align:center}
+.mbox h2{font-family:'Fraunces',Georgia,serif;margin:0 0 6px;font-size:24px}
+.mbox p{color:var(--muted);margin:6px 0 14px;font-size:14px;line-height:1.5}
+.mbox .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.mbox input{font:700 20px 'DM Sans',system-ui,sans-serif;width:130px;text-align:center;padding:9px;border-radius:10px;border:2px solid var(--line);margin-bottom:14px;background:#fff;color:var(--ink)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(30px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-size:13.5px;font-weight:600;opacity:0;transition:.25s;pointer-events:none;z-index:60;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.store{font-size:12px;color:var(--muted)}
+@media (max-width:380px){nav button{padding:6px 6px;font-size:12px}.brand{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">Cage Six <small>v0.5</small></div>
+    <nav><button data-v="play" class="on">Play</button><button data-v="stats">Stats</button><button data-v="how">How it's made</button></nav>
+  </header>
+
+  <section class="view show" id="v-play">
+    <div class="levels" id="levels"></div>
+    <div class="bar">
+      <div class="pz"><button class="ic" id="prev" aria-label="Previous puzzle">‹</button><b id="pzname" title="Go to puzzle…">—</b><button class="ic" id="next" aria-label="Next puzzle">›</button></div>
+      <div class="timer"><span id="time">0:00</span><button class="ic" id="pause" aria-label="Pause">❚❚</button></div>
+    </div>
+    <div class="wrap">
+      <div class="board" id="board"></div>
+      <div class="cover" id="cover"></div>
+    </div>
+    <div class="pad" id="pad"></div>
+    <div class="tools">
+      <button id="t-notes"><em>✎</em>Notes</button>
+      <button id="t-erase"><em>⌫</em>Erase</button>
+      <button id="t-undo"><em>↶</em>Undo</button>
+      <button id="t-hint"><em>💡</em>Hint</button>
+      <button id="t-check"><em>✓</em>Check</button>
+      <button id="t-reset"><em>↺</em>Restart</button>
+    </div>
+    <div class="tip">Fill every row and column with 1–6 once each. Each heavy-outlined cage must make its target using its operation.</div>
+  </section>
+
+  <section class="view" id="v-stats"></section>
+
+  <section class="view how" id="v-how">
+    <div class="card"><h3>The rules</h3>
+      <p>Every row and every column holds the digits 1–6 exactly once. The grid is divided into <b>cages</b> (heavy outlines). The small clue in a cage's corner is a target and an operation: the digits in that cage must combine to the target. For <code>−</code> and <code>÷</code> (always two-cell cages) take the larger digit first. A one-cell cage simply tells you its digit. Digits may repeat inside a cage as long as they are not in the same row or column.</p>
+    </div>
+    <div class="card"><h3>How each puzzle is built</h3>
+      <ol>
+        <li><b>A seed, not a file.</b> Every puzzle is named by its level and number, e.g. <i>Hard #0042</i>. That name is hashed into a seed for a small random-number generator (mulberry32), so the same name always rebuilds exactly the same puzzle on any device. Nothing is downloaded, yet there are <b>5,000 puzzles per level — 20,000 in total</b>.</li>
+        <li><b>The answer comes first.</b> A random 6×6 Latin square (every row and column 1–6) is built by randomised backtracking. This is the hidden solution.</li>
+        <li><b>Cages are grown.</b> Starting from random unclaimed cells, cages "grow" into neighbouring cells until they reach a size drawn from the level's size profile. Easy uses mostly 2-cell cages and up to four free single-cell clues; Super hard uses 2- to 5-cell cages and no free clues.</li>
+        <li><b>Operations are chosen.</b> Two-cell cages get <code>+ − × ÷</code> (÷ only when it divides exactly); larger cages get <code>+</code> or <code>×</code>. The target is computed from the hidden solution.</li>
+        <li><b>A logic solver grades it.</b> The puzzle is handed to a solver that only uses human-style techniques, always trying the simplest first and recording the hardest one it needed (table below).</li>
+        <li><b>Keep or throw away.</b> If the grade matches the level being built, the puzzle is kept; otherwise the next seed (attempt 2, 3, …) is tried. A puzzle the solver can finish by pure logic is proved to have exactly <b>one</b> answer. Super-hard candidates are additionally checked by a brute-force counter that must find exactly one solution. Easy puzzles typically take ~9 tries, Super hard ~30.</li>
+      </ol>
+    </div>
+    <div class="card"><h3>What makes a level</h3>
+      <table>
+        <tr><th>Level</th><th style="text-align:left;padding-left:10px">Hardest technique needed</th></tr>
+        <tr><td><span class="chip" style="background:var(--easy)">Easy</span></td><td style="text-align:left;padding-left:10px">Singles only: a cell with one possible digit, a digit with one possible home in a row/column, and the options for 1- and 2-cell cages.</td></tr>
+        <tr><td><span class="chip" style="background:var(--mild)">Mild</span></td><td style="text-align:left;padding-left:10px">Combination work on 3+ cell cages: listing which sets of digits can make e.g. <code>13+</code> across three cells and ruling out the rest.</td></tr>
+        <tr><td><span class="chip" style="background:var(--hard)">Hard</span></td><td style="text-align:left;padding-left:10px">Interactions: a cage that must put a digit in part of a row removes it from the rest of that row; naked pairs/triples and hidden pairs.</td></tr>
+        <tr><td><span class="chip" style="background:var(--super)">Super hard</span></td><td style="text-align:left;padding-left:10px">All of the above get stuck. You must reason "if this cell were 4… that breaks something", i.e. trial and contradiction, at least once.</td></tr>
+      </table>
+    </div>
+    <div class="card"><h3>What is saved</h3>
+      <p>Your progress is stored in cookies on this device: puzzles started and solved per level, best / average / last times, hints, checks and mistakes, a daily solving streak, which puzzle numbers you've solved, and your unfinished grid on each level (so you can switch levels and come back). If this browser blocks cookies, the app falls back to local browser storage, and says so on the Stats page.</p>
+    </div>
+  </section>
+</div>
+
+<div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== KenKen-style 6x6 engine: generator, solver, grader =====
+const KK = (() => {
+  const N = 6, NN = 36, ALL = 0b1111110; // bits 1..6
+  const bit = v => 1 << v;
+  const pop = m => { let c = 0; while (m) { m &= m - 1; c++; } return c; };
+  const low = m => { for (let v = 1; v <= 6; v++) if (m & bit(v)) return v; return 0; };
+  const R = i => (i / N) | 0, C = i => i % N;
+
+  // Peers / lines
+  const LINES = [];
+  for (let r = 0; r < N; r++) LINES.push([...Array(N)].map((_, c) => r * N + c));
+  for (let c = 0; c < N; c++) LINES.push([...Array(N)].map((_, r) => r * N + c));
+  const PEERS = [...Array(NN)].map((_, i) => {
+    const s = [];
+    for (let j = 0; j < NN; j++) if (j !== i && (R(j) === R(i) || C(j) === C(i))) s.push(j);
+    return s;
+  });
+
+  // Seeded PRNG
+  function hashStr(str) {
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+    h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  }
+  function mulberry32(a) {
+    return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const shuffle = (a, rng) => { for (let i = a.length - 1; i > 0; i--) { const j = (rng() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const pickW = (w, rng) => { const ks = Object.keys(w); let t = ks.reduce((s, k) => s + w[k], 0) * rng();
+    for (const k of ks) { t -= w[k]; if (t <= 0) return k; } return ks[ks.length - 1]; };
+
+  // 1. Random Latin square (randomised backtracking)
+  function genLatin(rng) {
+    const g = new Array(NN).fill(0), rm = new Array(N).fill(0), cm = new Array(N).fill(0);
+    const fill = i => {
+      if (i === NN) return true;
+      const r = R(i), c = C(i);
+      const vals = shuffle([1, 2, 3, 4, 5, 6], rng);
+      for (const v of vals) {
+        if ((rm[r] | cm[c]) & bit(v)) continue;
+        g[i] = v; rm[r] |= bit(v); cm[c] |= bit(v);
+        if (fill(i + 1)) return true;
+        rm[r] &= ~bit(v); cm[c] &= ~bit(v);
+      }
+      return false;
+    };
+    fill(0); return g;
+  }
+
+  const nbrs = i => { const r = R(i), c = C(i), o = [];
+    if (r > 0) o.push(i - N); if (r < N - 1) o.push(i + N); if (c > 0) o.push(i - 1); if (c < N - 1) o.push(i + 1); return o; };
+
+  // 2. Random cage partition
+  function genCages(rng, prof) {
+    const owner = new Array(NN).fill(-1), cages = [];
+    const order = shuffle([...Array(NN).keys()], rng);
+    for (const start of order) {
+      if (owner[start] >= 0) continue;
+      const size = +pickW(prof.sizes, rng);
+      const cage = [start]; owner[start] = cages.length;
+      while (cage.length < size) {
+        const front = [];
+        for (const x of cage) for (const y of nbrs(x)) if (owner[y] < 0 && !front.includes(y)) front.push(y);
+        if (!front.length) break;
+        const y = front[(rng() * front.length) | 0]; owner[y] = cages.length; cage.push(y);
+      }
+      cages.push(cage);
+    }
+    // Limit singletons: merge extras into a neighbouring cage
+    let singles = cages.map((c, k) => c.length === 1 ? k : -1).filter(k => k >= 0);
+    shuffle(singles, rng);
+    for (const k of singles.slice(prof.maxSingles)) {
+      const cell = cages[k][0];
+      const opts = nbrs(cell).map(y => owner[y]).filter(o => o !== k && cages[o].length && cages[o].length < prof.maxSize);
+      if (!opts.length) continue;
+      const t = opts[(rng() * opts.length) | 0];
+      cages[t].push(cell); owner[cell] = t; cages[k] = [];
+    }
+    return cages.filter(c => c.length).map(c => c.sort((a, b) => a - b));
+  }
+
+  // 3. Operations / targets
+  function assignOps(rng, cells, sol, prof) {
+    const v = cells.map(i => sol[i]);
+    if (cells.length === 1) return { cells, op: '', t: v[0] };
+    if (cells.length === 2) {
+      const [a, b] = [Math.max(...v), Math.min(...v)];
+      const w = Object.assign({}, prof.ops2);
+      if (a % b !== 0) delete w['÷'];
+      const op = pickW(w, rng);
+      const t = op === '+' ? a + b : op === '-' ? a - b : op === '×' ? a * b : a / b;
+      return { cells, op, t };
+    }
+    const op = pickW(prof.opsN, rng);
+    return { cells, op, t: op === '+' ? v.reduce((s, x) => s + x, 0) : v.reduce((s, x) => s * x, 1) };
+  }
+
+  // All value-tuples that satisfy a cage (respecting row/col distinctness inside the cage)
+  function cageTuples(cage) {
+    const { cells, op, t } = cage, k = cells.length, out = [], cur = [];
+    const rec = (d, acc) => {
+      if (d === k) {
+        let ok;
+        if (op === '') ok = cur[0] === t;
+        else if (op === '+') ok = acc === t;
+        else if (op === '×') ok = acc === t;
+        else if (op === '-') ok = Math.abs(cur[0] - cur[1]) === t;
+        else ok = Math.max(cur[0], cur[1]) / Math.min(cur[0], cur[1]) === t;
+        if (ok) out.push(cur.slice()); return;
+      }
+      for (let v = 1; v <= 6; v++) {
+        let clash = false;
+        for (let e = 0; e < d; e++) if (cur[e] === v && (R(cells[e]) === R(cells[d]) || C(cells[e]) === C(cells[d]))) { clash = true; break; }
+        if (clash) continue;
+        const na = op === '+' ? acc + v : op === '×' ? acc * v : acc;
+        if (op === '+' && na > t) continue;
+        if (op === '×' && t % na !== 0) continue;
+        cur[d] = v; rec(d + 1, na);
+      }
+    };
+    rec(0, op === '×' ? 1 : 0);
+    return out;
+  }
+
+  // ===== Logical solver with graded techniques =====
+  // Level 1: singles (naked/hidden) + filtering small cages (1–2 cells)
+  // Level 2: combination filtering on big (3+ cell) cages
+  // Level 3: cage/line "pointing" + naked pairs/triples + hidden pairs in rows/columns
+  // Level 4: trial-and-contradiction (assume a value, follow level-3 logic, refute it)
+  function prepare(cages) {
+    const owner = new Array(NN);
+    const cs = cages.map((cg, k) => { cg.cells.forEach(i => owner[i] = k); return { ...cg, tuples: cageTuples(cg) }; });
+    return { cages: cs, owner };
+  }
+
+  function filterCage(cand, cg) {
+    const cells = cg.cells, k = cells.length, keep = new Array(k).fill(0), live = [];
+    for (const tp of cg.tuples) {
+      let ok = true;
+      for (let e = 0; e < k; e++) if (!(cand[cells[e]] & bit(tp[e]))) { ok = false; break; }
+      if (ok) { live.push(tp); for (let e = 0; e < k; e++) keep[e] |= bit(tp[e]); }
+    }
+    let changed = false;
+    if (!live.length) return -1;
+    for (let e = 0; e < k; e++) { const n = cand[cells[e]] & keep[e]; if (n !== cand[cells[e]]) { cand[cells[e]] = n; changed = true; if (!n) return -1; } }
+    return { changed, live };
+  }
+
+  // returns: -1 contradiction, 0 nothing, 1 progress
+  function stepLevel(P, cand, L) {
+    let prog = 0;
+    if (L === 1) {
+      // naked singles -> eliminate from peers
+      for (let i = 0; i < NN; i++) if (pop(cand[i]) === 1)
+        for (const p of PEERS[i]) if (cand[p] & cand[i]) { cand[p] &= ~cand[i]; if (!cand[p]) return -1; prog = 1; }
+      if (prog) return 1;
+      // hidden singles
+      for (const line of LINES) for (let v = 1; v <= 6; v++) {
+        let where = -1, n = 0;
+        for (const i of line) if (cand[i] & bit(v)) { n++; where = i; }
+        if (n === 0) return -1;
+        if (n === 1 && cand[where] !== bit(v)) { cand[where] = bit(v); prog = 1; }
+      }
+      if (prog) return 1;
+      for (const cg of P.cages) if (cg.cells.length <= 2) { const r = filterCage(cand, cg); if (r === -1) return -1; if (r.changed) prog = 1; }
+      return prog;
+    }
+    if (L === 2) {
+      for (const cg of P.cages) if (cg.cells.length > 2) { const r = filterCage(cand, cg); if (r === -1) return -1; if (r.changed) prog = 1; }
+      return prog;
+    }
+    if (L === 3) {
+      // Pointing: a value that every live combination places inside the cage's part of a line
+      for (const cg of P.cages) {
+        if (cg.cells.length < 2) continue;
+        const r = filterCage(cand, cg); if (r === -1) return -1;
+        const groups = {};
+        cg.cells.forEach((i, e) => { (groups['r' + R(i)] ||= []).push(e); (groups['c' + C(i)] ||= []).push(e); });
+        for (const key in groups) {
+          const es = groups[key]; if (es.length < 1) continue;
+          let must = ALL;
+          for (const tp of r.live) { let m = 0; for (const e of es) m |= bit(tp[e]); must &= m; }
+          if (!must) continue;
+          const idx = +key.slice(1), line = key[0] === 'r' ? LINES[idx] : LINES[N + idx];
+          const inCage = new Set(es.map(e => cg.cells[e]));
+          for (const i of line) if (!inCage.has(i) && (cand[i] & must)) { cand[i] &= ~must; if (!cand[i]) return -1; prog = 1; }
+        }
+      }
+      if (prog) return 1;
+      for (const line of LINES) {
+        const un = line.filter(i => pop(cand[i]) > 1);
+        // naked pairs & triples
+        for (let size = 2; size <= 3; size++) {
+          const pool = un.filter(i => pop(cand[i]) <= size);
+          const combo = (st, chosen, mask) => {
+            if (chosen.length === size) {
+              if (pop(mask) !== size) return 0;
+              let p = 0;
+              for (const i of un) if (!chosen.includes(i) && (cand[i] & mask)) { cand[i] &= ~mask; if (!cand[i]) return -1; p = 1; }
+              return p;
+            }
+            for (let q = st; q < pool.length; q++) {
+              const m = mask | cand[pool[q]]; if (pop(m) > size) continue;
+              chosen.push(pool[q]); const r = combo(q + 1, chosen, m); chosen.pop();
+              if (r) return r;
+            }
+            return 0;
+          };
+          const r = combo(0, [], 0); if (r === -1) return -1; if (r) return 1;
+        }
+        // hidden pairs
+        for (let a = 1; a <= 6; a++) for (let b = a + 1; b <= 6; b++) {
+          const ca = line.filter(i => cand[i] & bit(a)), cb = line.filter(i => cand[i] & bit(b));
+          if (ca.length === 2 && cb.length === 2 && ca[0] === cb[0] && ca[1] === cb[1]) {
+            const m = bit(a) | bit(b);
+            for (const i of ca) if (cand[i] & ~m) { cand[i] &= m; prog = 1; }
+            if (prog) return 1;
+          }
+        }
+      }
+      return 0;
+    }
+    if (L === 4) {
+      const cells = [...Array(NN).keys()].filter(i => pop(cand[i]) > 1).sort((a, b) => pop(cand[a]) - pop(cand[b]));
+      for (const i of cells) for (let v = 1; v <= 6; v++) {
+        if (!(cand[i] & bit(v))) continue;
+        const copy = cand.slice(); copy[i] = bit(v);
+        if (run(P, copy, 3).status === -1) { cand[i] &= ~bit(v); if (!cand[i]) return -1; return 1; }
+      }
+      return 0;
+    }
+    return 0;
+  }
+
+  function valid(P, cand) {
+    for (const line of LINES) { let m = 0; for (const i of line) m |= cand[i]; if (m !== ALL) return false; }
+    for (const cg of P.cages) if (filterCage(cand, cg) === -1) return false;
+    return true;
+  }
+
+  // Apply techniques cheapest-first; record hardest used and how often
+  function run(P, cand, maxL) {
+    const used = [0, 0, 0, 0, 0];
+    for (;;) {
+      let done = true;
+      for (let i = 0; i < NN; i++) if (pop(cand[i]) !== 1) { done = false; break; }
+      if (done) return { status: valid(P, cand) ? 1 : -1, used };
+      let moved = false;
+      for (let L = 1; L <= maxL; L++) {
+        const r = stepLevel(P, cand, L);
+        if (r === -1) return { status: -1, used };
+        if (r === 1) { used[L]++; moved = true; break; }
+      }
+      if (!moved) return { status: 0, used };
+    }
+  }
+
+  function grade(P) {
+    const cand = new Array(NN).fill(ALL);
+    const r = run(P, cand, 4);
+    if (r.status !== 1) return { level: 0, used: r.used };
+    let lvl = 1; for (let L = 4; L >= 1; L--) if (r.used[L]) { lvl = L; break; }
+    return { level: lvl, used: r.used };
+  }
+
+  function quickGrade(P) {
+    const cand = new Array(NN).fill(ALL), r = run(P, cand, 3);
+    if (r.status !== 1) return { level: 0, used: r.used };
+    let lvl = 1; for (let L = 3; L >= 1; L--) if (r.used[L]) { lvl = L; break; }
+    return { level: lvl, used: r.used };
+  }
+
+  // Brute-force solution counter (stops at 2) – proves uniqueness
+  function countSolutions(P, limit = 2) {
+    let count = 0;
+    const rec = cand => {
+      if (run(P, cand, 2).status === -1) return;
+      let best = -1, bc = 9;
+      for (let i = 0; i < NN; i++) { const p = pop(cand[i]); if (p > 1 && p < bc) { bc = p; best = i; } }
+      if (best < 0) { count++; return; }
+      for (let v = 1; v <= 6 && count < limit; v++) if (cand[best] & bit(v)) {
+        const c = cand.slice(); c[best] = bit(v); rec(c);
+      }
+    };
+    rec(new Array(NN).fill(ALL));
+    return count;
+  }
+
+  const LEVELS = ['easy', 'mild', 'hard', 'super'];
+  const PROFILES = {
+    easy:  { sizes: { 1: 2, 2: 7, 3: 2 }, maxSingles: 4, maxSize: 3, ops2: { '+': 3, '-': 3, '×': 2, '÷': 3 }, opsN: { '+': 3, '×': 2 } },
+    mild:  { sizes: { 1: 1, 2: 6, 3: 3, 4: 1 }, maxSingles: 2, maxSize: 4, ops2: { '+': 2, '-': 3, '×': 2, '÷': 2 }, opsN: { '+': 3, '×': 2 } },
+    hard:  { sizes: { 1: 1, 2: 4, 3: 4, 4: 2 }, maxSingles: 1, maxSize: 4, ops2: { '+': 2, '-': 3, '×': 2, '÷': 2 }, opsN: { '+': 1, '×': 1 } },
+    super: { sizes: { 2: 3, 3: 4, 4: 3, 5: 1 }, maxSingles: 0, maxSize: 5, ops2: { '+': 2, '-': 3, '×': 2, '÷': 1 }, opsN: { '+': 2, '×': 1 } },
+  };
+  const TARGET = { easy: 1, mild: 2, hard: 3, super: 4 };
+
+  // Deterministic puzzle #n of a level: try seeds (level,n,attempt) until one is unique AND grades to the level
+  function puzzle(level, n) {
+    const prof = PROFILES[level];
+    for (let attempt = 0; attempt < 5000; attempt++) {
+      const rng = mulberry32(hashStr(`kk6|${level}|${n}|${attempt}`));
+      const sol = genLatin(rng);
+      const cages = genCages(rng, prof).map(c => assignOps(rng, c, sol, prof));
+      const P = prepare(cages);
+      const tgt = TARGET[level];
+      let g = quickGrade(P);                  // logic up to level 3 only (cheap)
+      if (tgt < 4) { if (g.level !== tgt) continue; }
+      else {
+        if (g.level) continue;                // solvable without trial -> not super hard
+        if (countSolutions(P) !== 1) continue; // must still have exactly one answer
+        g = grade(P); if (g.level !== 4) continue; // and be crackable by trial + logic
+      }
+      return { level, n, attempt, sol, cages: cages.map(c => ({ cells: c.cells, op: c.op, t: c.t })), used: g.used };
+    }
+    return null;
+  }
+
+  return { puzzle, grade, prepare, countSolutions, LEVELS, PROFILES, N };
+})();
+if (typeof module !== 'undefined') module.exports = KK;
+
+</script>
+<script>
+(() => {
+const PER = 5000, LV = KK.LEVELS;
+const LNAME = { easy: 'Easy', mild: 'Mild', hard: 'Hard', super: 'Super hard' };
+const LSHORT = { easy: 'e', mild: 'm', hard: 'h', super: 's' };
+const $ = id => document.getElementById(id);
+
+// ---------- Storage: cookies first, localStorage mirror/fallback, memory last ----------
+const Store = (() => {
+  const mem = {}; let cookie = false, local = false;
+  const attrs = () => ';path=/;max-age=63072000' + (location.protocol === 'https:' ? ';SameSite=None;Secure' : ';SameSite=Lax');
+  try { document.cookie = 'kk6_t=1' + attrs(); cookie = document.cookie.indexOf('kk6_t=1') >= 0; document.cookie = 'kk6_t=;path=/;max-age=0'; } catch (e) { cookie = false; }
+  try { localStorage.setItem('kk6_t', '1'); localStorage.removeItem('kk6_t'); local = true; } catch (e) { local = false; }
+  const readCookie = k => { try { const m = document.cookie.match('(?:^|; )' + k + '=([^;]*)'); return m ? decodeURIComponent(m[1]) : null; } catch (e) { return null; } };
+  return {
+    mode: cookie ? 'cookies' : local ? 'browser storage (cookies blocked here)' : 'this session only (storage blocked)',
+    get(k) {
+      let v = null;
+      if (cookie) v = readCookie(k);
+      if (v == null && local) try { v = localStorage.getItem(k); } catch (e) {}
+      if (v == null) v = mem[k] ?? null;
+      return v;
+    },
+    set(k, v) {
+      mem[k] = v;
+      if (cookie) try { document.cookie = k + '=' + encodeURIComponent(v) + attrs(); } catch (e) {}
+      if (local) try { localStorage.setItem(k, v); } catch (e) {}
+    },
+    del(k) {
+      delete mem[k];
+      if (cookie) try { document.cookie = k + '=;path=/;max-age=0' + (location.protocol === 'https:' ? ';SameSite=None;Secure' : ''); } catch (e) {}
+      if (local) try { localStorage.removeItem(k); } catch (e) {}
+    }
+  };
+})();
+
+// ---------- Stats ----------
+const blankL = () => ({ p: 0, s: 0, t: 0, b: 0, l: 0, h: 0, c: 0, x: 0, n: 1 });
+function loadStats() {
+  let s = null; try { s = JSON.parse(Store.get('kk6_stats')); } catch (e) {}
+  if (!s || !s.L) s = { first: 0, last: 0, day: '', streak: 0, best: 0, lv: 'easy', L: {} };
+  LV.forEach(l => s.L[l] = Object.assign(blankL(), s.L[l] || {}));
+  return s;
+}
+let S = loadStats();
+const saveStats = () => Store.set('kk6_stats', JSON.stringify(S));
+
+// solved puzzle numbers, stored as compact ranges "1-12.15.20-22"
+const enc = set => { const a = [...set].sort((x, y) => x - y), out = []; for (let i = 0; i < a.length;) { let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(i === j ? a[i] : a[i] + '-' + a[j]); i = j + 1; } return out.join('.'); };
+const dec = str => { const s = new Set(); (str || '').split('.').filter(Boolean).forEach(p => { const [a, b] = p.split('-').map(Number); for (let x = a; x <= (b || a); x++) s.add(x); }); return s; };
+const DONE = {}; LV.forEach(l => DONE[l] = dec(Store.get('kk6_d_' + LSHORT[l])));
+const saveDone = l => Store.set('kk6_d_' + LSHORT[l], enc(DONE[l]));
+
+// ---------- Puzzle cache ----------
+const cache = new Map();
+const getPuzzle = (l, n) => { const k = l + n; if (!cache.has(k)) cache.set(k, KK.puzzle(l, n)); return cache.get(k); };
+
+// ---------- Game state ----------
+let G = null, view = 'play', paused = false, notesMode = false, sel = -1, cells = [], wrongFlash = null, rightFlash = null, flashT;
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+function saveCur() {
+  if (!G || G.solved) return;
+  Store.set('kk6_c_' + LSHORT[G.level], JSON.stringify({ n: G.n, v: G.vals.join(''), o: G.notes.map(m => B64[m >> 1]).join(''), e: G.elapsed | 0, h: [...G.hinted], s: G.started ? 1 : 0, k: G.checked }));
+}
+function loadCur(l, n) {
+  try { const c = JSON.parse(Store.get('kk6_c_' + LSHORT[l])); if (c && c.n === n) return c; } catch (e) {}
+  return null;
+}
+
+function openPuzzle(l, n) {
+  n = Math.max(1, Math.min(PER, n | 0));
+  if (G && !G.solved) saveCur();
+  S.lv = l; S.L[l].n = n; saveStats();
+  document.documentElement.style.setProperty('--acc', `var(--${l})`);
+  renderLevels();
+  $('pzname').textContent = '…'; showCover('Building puzzle…');
+  setTimeout(() => {
+    const puz = getPuzzle(l, n);
+    const owner = new Array(36); puz.cages.forEach((c, k) => c.cells.forEach(i => owner[i] = k));
+    G = { level: l, n, puz, owner, vals: new Array(36).fill(0), notes: new Array(36).fill(0), hinted: new Set(), elapsed: 0, started: false, solved: false, undo: [], checked: 0 };
+    const c = loadCur(l, n);
+    if (c) { G.vals = c.v.split('').map(Number); G.notes = c.o.split('').map(ch => B64.indexOf(ch) << 1); G.elapsed = c.e; G.hinted = new Set(c.h); G.started = !!c.s; G.checked = c.k || 0; }
+    sel = -1; paused = false; buildBoard(); hideCover(); refresh();
+    if (DONE[l].has(n) && !c) toast(`You've solved ${LNAME[l]} #${n} before — play it again or press › for a new one`);
+    setTimeout(() => { const nx = nextUnsolved(l, n); if (nx) getPuzzle(l, nx); }, 400); // prefetch
+  }, 20);
+}
+const nextUnsolved = (l, n) => { for (let k = n + 1; k <= PER; k++) if (!DONE[l].has(k)) return k; for (let k = 1; k < n; k++) if (!DONE[l].has(k)) return k; return null; };
+const pad4 = n => String(n).padStart(4, '0');
+const fmt = s => { s = Math.round(s); const h = (s / 3600) | 0, m = ((s % 3600) / 60) | 0, x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+
+// ---------- Rendering ----------
+function renderLevels() {
+  $('levels').innerHTML = LV.map(l => `<button data-l="${l}" class="${S.lv === l ? 'on' : ''}" style="--c:var(--${l})"><i style="background:var(--${l})"></i>${LNAME[l]}<span>${DONE[l].size.toLocaleString()} / ${PER.toLocaleString()}</span></button>`).join('');
+}
+function buildBoard() {
+  const b = $('board'); b.innerHTML = ''; cells = [];
+  const { owner, puz } = G;
+  for (let i = 0; i < 36; i++) {
+    const r = (i / 6) | 0, c = i % 6, d = document.createElement('div');
+    d.className = 'cell';
+    d.style.borderTop = r === 0 ? '0' : owner[i] === owner[i - 6] ? '1px solid var(--line)' : '2.5px solid var(--ink)';
+    d.style.borderLeft = c === 0 ? '0' : owner[i] === owner[i - 1] ? '1px solid var(--line)' : '2.5px solid var(--ink)';
+    const cg = puz.cages[owner[i]];
+    if (cg.cells[0] === i) d.innerHTML = `<span class="lbl">${cg.t}${cg.op === '-' ? '−' : cg.op}</span>`;
+    d.insertAdjacentHTML('beforeend', '<div class="notes"></div><span class="v"></span>');
+    d.addEventListener('pointerdown', e => { e.preventDefault(); select(i); });
+    b.appendChild(d); cells.push(d);
+  }
+}
+function cageWrong(k) {
+  const cg = G.puz.cages[k], v = cg.cells.map(i => G.vals[i]);
+  if (v.some(x => !x)) return false;
+  let r;
+  if (cg.op === '') r = v[0]; else if (cg.op === '+') r = v.reduce((a, b) => a + b, 0); else if (cg.op === '×') r = v.reduce((a, b) => a * b, 1);
+  else if (cg.op === '-') r = Math.abs(v[0] - v[1]); else r = Math.max(...v) / Math.min(...v);
+  return r !== cg.t;
+}
+function refresh() {
+  if (!G) return;
+  const { vals, notes, hinted } = G, sr = sel >= 0 ? (sel / 6) | 0 : -1, sc = sel % 6, sv = sel >= 0 ? vals[sel] : 0;
+  for (let i = 0; i < 36; i++) {
+    const r = (i / 6) | 0, c = i % 6, d = cells[i], v = vals[i];
+    let bad = false;
+    if (v) for (let j = 0; j < 36; j++) if (j !== i && vals[j] === v && (((j / 6) | 0) === r || j % 6 === c)) { bad = true; break; }
+    d.className = 'cell' + (i === sel ? ' sel' : sv && v === sv ? ' same' : (r === sr || c === sc) ? ' peer' : '') + (bad ? ' bad' : '') + (hinted.has(i) ? ' hint' : '') + (wrongFlash && wrongFlash.has(i) ? ' wrong' : '') + (rightFlash && rightFlash.has(i) ? ' right' : '');
+    d.querySelector('.v').textContent = v || '';
+    const nd = d.querySelector('.notes');
+    nd.innerHTML = v ? '' : [1, 2, 3, 4, 5, 6].map(x => `<span>${notes[i] & (1 << x) ? x : ''}</span>`).join('');
+  }
+  G.puz.cages.forEach((cg, k) => { const l = cells[cg.cells[0]].querySelector('.lbl'); if (l) l.classList.toggle('bad', cageWrong(k)); });
+  $('pzname').textContent = `#${pad4(G.n)}${DONE[G.level].has(G.n) ? ' ✓' : ''}`;
+  $('time').textContent = fmt(G.elapsed);
+  $('pad').classList.toggle('notesmode', notesMode);
+  $('t-notes').classList.toggle('on', notesMode);
+  $('pause').textContent = paused ? '▶' : '❚❚';
+}
+function showCover(html) { const c = $('cover'); c.innerHTML = html; c.classList.add('show'); }
+function hideCover() { $('cover').classList.remove('show'); }
+
+// ---------- Input ----------
+function select(i) { if (!G || paused || G.solved) return; sel = i; refresh(); }
+function snapshot() { G.undo.push({ v: G.vals.slice(), o: G.notes.slice(), h: [...G.hinted] }); if (G.undo.length > 300) G.undo.shift(); }
+function markStarted() {
+  S.last = Date.now(); if (!S.first) S.first = S.last;
+  if (!G.started) { G.started = true; S.L[G.level].p++; }
+  saveStats();
+}
+function enter(v) {
+  if (!G || paused || G.solved || sel < 0 || G.hinted.has(sel)) return;
+  snapshot();
+  if (notesMode) { if (G.vals[sel]) return G.undo.pop(); G.notes[sel] ^= 1 << v; }
+  else {
+    G.vals[sel] = G.vals[sel] === v ? 0 : v;
+    if (G.vals[sel]) { const r = (sel / 6) | 0, c = sel % 6; for (let j = 0; j < 36; j++) if (((j / 6) | 0) === r || j % 6 === c) G.notes[j] &= ~(1 << v); }
+  }
+  markStarted(); refresh(); saveCur(); checkDone();
+}
+function erase() { if (!G || paused || G.solved || sel < 0 || G.hinted.has(sel)) return; snapshot(); G.vals[sel] = 0; G.notes[sel] = 0; refresh(); saveCur(); }
+function undo() { if (!G || paused || G.solved || !G.undo.length) return; const u = G.undo.pop(); G.vals = u.v; G.notes = u.o; G.hinted = new Set(u.h); refresh(); saveCur(); }
+function hint() {
+  if (!G || paused || G.solved) return;
+  const sol = G.puz.sol;
+  let i = sel >= 0 && G.vals[sel] !== sol[sel] ? sel : -1;
+  if (i < 0) i = G.vals.findIndex((v, k) => v && v !== sol[k]);
+  if (i < 0) { // reveal the empty cell with fewest options in its cage
+    const empty = [...Array(36).keys()].filter(k => !G.vals[k]);
+    if (!empty.length) return; i = empty[(Math.random() * empty.length) | 0];
+  }
+  snapshot(); G.vals[i] = sol[i]; G.notes[i] = 0; G.hinted.add(i); sel = i;
+  S.L[G.level].h++; markStarted(); refresh(); saveCur(); toast('Hint: one cell revealed'); checkDone();
+}
+function check() {
+  if (!G || paused || G.solved) return;
+  const wrong = new Set(), right = new Set();
+  G.vals.forEach((v, i) => { if (v) (v === G.puz.sol[i] ? right : wrong).add(i); });
+  S.L[G.level].c++; S.L[G.level].x += wrong.size; G.checked++; saveStats(); saveCur();
+  if (!wrong.size && !right.size) { toast('Nothing to check yet'); return; }
+  wrongFlash = wrong; rightFlash = right; refresh();
+  toast(wrong.size ? `${right.size} correct · ${wrong.size} wrong` : `All ${right.size} answers correct ✓`);
+  clearTimeout(flashT); flashT = setTimeout(() => { wrongFlash = rightFlash = null; refresh(); }, 2500);
+}
+function restart() {
+  if (!G || G.solved) return;
+  modal(`<h2>Restart?</h2><p>Clear the grid for ${LNAME[G.level]} #${pad4(G.n)}. The timer keeps running.</p>`,
+    [['Cancel', 'alt', closeModal], ['Restart', 'danger', () => { snapshot(); G.vals.fill(0); G.notes.fill(0); G.hinted.clear(); refresh(); saveCur(); closeModal(); }]]);
+}
+function todayStr(d = new Date()) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+function checkDone() {
+  if (!G.vals.every(Boolean)) return;
+  if (!G.vals.every((v, i) => v === G.puz.sol[i])) { toast('Grid full, but something isn\'t right — try Check'); return; }
+  G.solved = true; sel = -1;
+  const L = S.L[G.level], t = G.elapsed | 0, clean = G.hinted.size === 0;
+  const prevBest = L.b;
+  L.s++; L.t += t; L.l = t; if (clean && (!L.b || t < L.b)) L.b = t;
+  const today = todayStr(), y = new Date(); y.setDate(y.getDate() - 1);
+  if (S.day !== today) { S.streak = S.day === todayStr(y) ? S.streak + 1 : 1; S.day = today; }
+  S.best = Math.max(S.best, S.streak); S.last = Date.now();
+  DONE[G.level].add(G.n); saveDone(G.level); saveStats(); Store.del('kk6_c_' + LSHORT[G.level]);
+  refresh(); renderLevels();
+  const pb = clean && L.b === t && prevBest !== t ? (prevBest ? ' · <b>New best!</b>' : ' · First solve at this level!') : '';
+  setTimeout(() => modal(`<h2>Solved!</h2><p>${LNAME[G.level]} #${pad4(G.n)} in <b>${fmt(t)}</b>${pb}<br>
+    Best ${L.b ? fmt(L.b) : '—'} · Average ${fmt(L.t / L.s)} · ${G.hinted.size} hint${G.hinted.size === 1 ? '' : 's'}<br>
+    Day streak: ${S.streak} · ${DONE[G.level].size} / ${PER} solved</p>`,
+    [['Stats', 'alt', () => { closeModal(); show('stats'); }], ['Next puzzle', '', () => { closeModal(); const nx = nextUnsolved(G.level, G.n); openPuzzle(G.level, nx || G.n + 1); }]]), 350);
+}
+
+// ---------- Modal / toast ----------
+function modal(html, btns) {
+  $('mbox').innerHTML = html + '<div class="row"></div>';
+  const row = $('mbox').querySelector('.row');
+  btns.forEach(([t, cls, fn]) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = t; b.onclick = fn; row.appendChild(b); });
+  $('modal').classList.add('show');
+}
+const closeModal = () => $('modal').classList.remove('show');
+let tt; function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2200); }
+
+function gotoDialog() {
+  modal(`<h2>Go to puzzle</h2><p>${LNAME[S.lv]} puzzles are numbered 1–${PER.toLocaleString()}.</p><input id="gonum" type="number" min="1" max="${PER}" inputmode="numeric" value="${G ? G.n : 1}">`,
+    [['Random unsolved', 'alt', () => { closeModal(); let k, tries = 0; do { k = 1 + ((Math.random() * PER) | 0); } while (DONE[S.lv].has(k) && ++tries < 50000); openPuzzle(S.lv, k); }],
+     ['Go', '', () => { const v = +$('gonum').value; closeModal(); if (v >= 1 && v <= PER) openPuzzle(S.lv, v); else toast('Pick 1–' + PER); }]]);
+  setTimeout(() => { const i = $('gonum'); i && i.select(); }, 50);
+}
+
+// ---------- Stats view ----------
+function renderStats() {
+  const tot = LV.reduce((a, l) => ({ s: a.s + S.L[l].s, p: a.p + S.L[l].p, t: a.t + S.L[l].t, h: a.h + S.L[l].h }), { s: 0, p: 0, t: 0, h: 0 });
+  const d = t => t ? new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  $('v-stats').innerHTML = `
+  <div class="card"><h3>Overall</h3><div class="kpis">
+    <div class="kpi"><b>${tot.p}</b><span>puzzles played</span></div>
+    <div class="kpi"><b>${tot.s}</b><span>solved</span></div>
+    <div class="kpi"><b>${tot.p ? Math.round(100 * tot.s / tot.p) : 0}%</b><span>completion</span></div>
+    <div class="kpi"><b>${fmt(tot.t)}</b><span>time solving</span></div>
+    <div class="kpi"><b>${S.streak}</b><span>day streak</span></div>
+    <div class="kpi"><b>${S.best}</b><span>best streak</span></div>
+  </div><p class="store" style="margin:10px 0 0">First played ${d(S.first)} · last played ${d(S.last)}</p></div>
+  <div class="card"><h3>By level</h3>
+    <table><tr><th>Level</th><th>Played</th><th>Solved</th><th>Best</th><th>Avg</th><th>Last</th></tr>
+    ${LV.map(l => { const L = S.L[l]; return `<tr><td><span class="chip" style="background:var(--${l})">${LNAME[l]}</span></td><td>${L.p}</td><td>${L.s}</td><td>${L.b ? fmt(L.b) : '—'}</td><td>${L.s ? fmt(L.t / L.s) : '—'}</td><td>${L.l ? fmt(L.l) : '—'}</td></tr>`; }).join('')}
+    </table>
+    <table style="margin-top:8px"><tr><th>Level</th><th>Hints</th><th>Checks</th><th>Mistakes found</th></tr>
+    ${LV.map(l => { const L = S.L[l]; return `<tr><td>${LNAME[l]}</td><td>${L.h}</td><td>${L.c}</td><td>${L.x}</td></tr>`; }).join('')}
+    </table></div>
+  <div class="card"><h3>Library progress</h3>
+    ${LV.map(l => `<div style="display:flex;justify-content:space-between;font-size:13px"><span>${LNAME[l]}</span><span>${DONE[l].size} / ${PER.toLocaleString()}</span></div><div class="prog"><div style="width:${Math.max(DONE[l].size ? 1 : 0, 100 * DONE[l].size / PER)}%;background:var(--${l})"></div></div>`).join('')}
+    <p class="store">Best times count only solves with no hints.</p></div>
+  <div class="card"><h3>Storage</h3><p class="store">Saving to: <b>${Store.mode}</b>. Nothing leaves this device.</p>
+    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">${installEvt ? '<button class="btn" id="installbtn">Install as app</button>' : ''}<button class="btn danger" id="resetall">Reset all stats</button></div>
+    <p class="store" style="margin:10px 0 0">${matchMedia('(display-mode: standalone)').matches ? 'Running as an installed app.' : 'To install: Chrome menu ⋮ → Install app (or Add to home screen).'}</p></div>`;
+  const ib = $('installbtn'); if (ib) ib.onclick = async () => { installEvt.prompt(); try { await installEvt.userChoice; } catch (e) {} installEvt = null; renderStats(); };
+  $('resetall').onclick = () => modal('<h2>Reset everything?</h2><p>This clears all stats, solved puzzles and saved grids on this device.</p>',
+    [['Cancel', 'alt', closeModal], ['Reset', 'danger', () => {
+      ['kk6_stats', ...LV.map(l => 'kk6_d_' + LSHORT[l]), ...LV.map(l => 'kk6_c_' + LSHORT[l])].forEach(Store.del);
+      S = loadStats(); LV.forEach(l => DONE[l] = new Set()); closeModal(); renderStats(); openPuzzle('easy', 1); show('stats'); toast('Stats reset');
+    }]]);
+}
+
+function show(v) {
+  view = v;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('show', s.id === 'v-' + v));
+  if (v === 'stats') renderStats();
+  if (v !== 'play' && G && !G.solved) saveCur();
+}
+
+// ---------- Install / offline ----------
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (view === 'stats') renderStats(); });
+window.addEventListener('appinstalled', () => { installEvt = null; toast('Cage Six installed'); });
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+}
+
+// ---------- Wiring ----------
+$('pad').innerHTML = [1, 2, 3, 4, 5, 6].map(v => `<button data-n="${v}">${v}</button>`).join('');
+$('pad').addEventListener('click', e => { const b = e.target.closest('button'); if (b) enter(+b.dataset.n); });
+$('levels').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const l = b.dataset.l; if (G && l === G.level) return; openPuzzle(l, S.L[l].n || 1); });
+document.querySelector('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) show(b.dataset.v); });
+$('t-notes').onclick = () => { notesMode = !notesMode; refresh(); };
+$('t-erase').onclick = erase; $('t-undo').onclick = undo; $('t-hint').onclick = hint; $('t-check').onclick = check; $('t-reset').onclick = restart;
+$('prev').onclick = () => G && openPuzzle(G.level, G.n > 1 ? G.n - 1 : PER);
+$('next').onclick = () => G && openPuzzle(G.level, G.n < PER ? G.n + 1 : 1);
+$('pzname').onclick = gotoDialog;
+$('pause').onclick = () => { if (!G || G.solved) return; paused = !paused; if (paused) { saveCur(); showCover('<div style="font-size:34px">❚❚</div>Paused — tap ▶ to carry on'); } else hideCover(); refresh(); };
+$('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', e => {
+  if ($('modal').classList.contains('show')) { if (e.key === 'Enter') { const b = $('mbox').querySelector('.row .btn:last-child'); b && b.click(); } if (e.key === 'Escape') closeModal(); return; }
+  if (view !== 'play' || !G) return;
+  if (e.key >= '1' && e.key <= '6') return enter(+e.key);
+  if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') return erase();
+  if (e.key === 'n' || e.key === 'N') { notesMode = !notesMode; return refresh(); }
+  if ((e.key === 'z' && (e.ctrlKey || e.metaKey)) || e.key === 'u') { e.preventDefault(); return undo(); }
+  const mv = { ArrowUp: -6, ArrowDown: 6, ArrowLeft: -1, ArrowRight: 1 }[e.key];
+  if (mv) { e.preventDefault(); if (sel < 0) sel = 0; else { const r = (sel / 6) | 0, c = sel % 6; if (mv === -1 && c === 0 || mv === 1 && c === 5) return; const nx = sel + mv; if (nx >= 0 && nx < 36) sel = nx; } refresh(); }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveCur(); });
+setInterval(() => {
+  if (!G || G.solved || paused || view !== 'play' || document.hidden || $('cover').classList.contains('show')) return;
+  G.elapsed++; $('time').textContent = fmt(G.elapsed);
+  if (G.elapsed % 5 === 0) saveCur();
+}, 1000);
+
+renderLevels();
+openPuzzle(S.lv || 'easy', S.L[S.lv || 'easy'].n || 1);
+})();
+</script>
+</body>
+</html>
