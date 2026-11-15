@@ -1,5 +1,5 @@
 // Cage Six service worker — bump VERSION on every release so devices pick up the new files.
-const VERSION = 'cage-six-v0.6';
+const VERSION = 'cage-six-v0.7';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
 const FONTS = 'cage-six-fonts';
 
