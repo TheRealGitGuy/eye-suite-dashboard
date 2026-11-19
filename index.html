@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.27</title>
+<title>Eye Suite Stats v0.28</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -107,6 +107,12 @@ td.n{white-space:nowrap}
 td:first-child{white-space:nowrap}
 .empty{color:var(--soft);font-size:13px;padding:6px 0}
 footer{color:var(--soft);font-size:12px}
+footer a{color:var(--soft)}
+/* v0.28: period label on each card, one line under each tab */
+.perchip{float:right;font:600 11px var(--sans);color:var(--soft);border:1px solid var(--line);border-radius:999px;padding:0 8px;margin-left:8px;white-space:nowrap}
+.tabintro{margin:-8px 0 16px}
+ul.rules{margin:0;padding-left:18px;font-size:13px}
+ul.rules li{margin:0 0 6px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .gate{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:var(--bg)}
 .gate[hidden]{display:none}
@@ -120,7 +126,7 @@ footer{color:var(--soft);font-size:12px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.27</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.28</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -197,7 +203,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.27</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.28</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -210,7 +216,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
   <nav class="tabs" id="sectionTabs" aria-label="Dashboard section"></nav>
   <div id="notes"></div>
   <main id="main"></main>
-  <footer>Figures exclude registered test devices, and every player of an app still in testing (Mash and Throne today), unless ticked. Rounds, right answers and play time also come from each game's own record, so visits closed with the Back button still count. Charts cover the last 90 days. Days are UK days; "this week" starts on Monday. The apps count their own days (ad-free first day, play days) on the phone's clock, so a US evening player can still be on their first day after UK midnight. Usage figures (players, opens, rounds) count from each app's usage-stats version: Gallery v5.16, Castle v1.19, Wing v2.16, Flag v1.12, Wine v0.34. Game figures count from Castle v1.21, Gallery v5.19, Wing v2.19, Flag v1.15 and Wine v0.36. Ads are on in Castle, Gallery, Wing and Flag (since 2 Nov; Flag on real ad units from v1.20, 8 Nov) and off in Wine and Throne. Average rounds in "Versions and rounds" count only players who reported rounds.</footer>
+  <footer>Test devices, and every player of an app still in testing, are left out unless "Include test devices" is ticked · UK days, weeks from Monday · <a href="#" id="howCounted">How the figures are counted</a></footer>
 </div>
 
 <script>
@@ -233,30 +239,33 @@ const APPS = [
 const appName = id => (APPS.find(a => a.id === id) || { name: id }).name;
 const appColour = id => `var(--${id})`;
 
-// v0.6: the page used to render every section (Overview, Games and ads, Features
-// and cross-promotion, Versions and rounds) stacked on one long scroll. As the
-// dashboard grew that got unwieldy, so each now sits behind its own tab.
+// v0.6: the page used to render every section on one long scroll; each now has
+// its own tab. v0.28: tabs regrouped by the question they answer (see
+// claude/eye-suite-dashboard-review-v0.28-proposal.md); old saved tabs map across.
 const SECTIONS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'day', label: 'Day' },
-  { id: 'games', label: 'Games & ads' },
-  { id: 'features', label: 'Features' },
-  { id: 'versions', label: 'Versions' },
-  { id: 'firstlast', label: 'First & last use' },
-  { id: 'levels', label: 'Levels' },
+  { id: 'overview', label: 'Overview', intro: 'How the apps are doing: today, this week and all time. Tap a figure for its detail.' },
+  { id: 'players', label: 'Players', intro: 'Who arrives, where from, and whether they stay.' },
+  { id: 'play', label: 'Play', intro: 'How players play: how long games last, how they end, the weekly bonus round and how far players get up the levels.' },
+  { id: 'features', label: 'Features', intro: 'Which features players use: hints and days in a row, the weekly challenge, leaderboards, sharing, collections, cross-promotion, and every screen the apps report.' },
+  { id: 'ads', label: 'Ads', intro: 'What ads are shown, what the rewarded offer does to play, and the settings that control both.' },
+  { id: 'day', label: 'Day', intro: '' },
+  { id: 'data', label: 'Data', intro: 'Whether the figures can be trusted: how each one is counted, which app versions players are on, and which builds send their counts.' },
 ];
+const OLD_SECTIONS = { games: 'play', versions: 'data', firstlast: 'players', levels: 'play' };
+const normSection = s => OLD_SECTIONS[s] || (SECTIONS.some(x => x.id === s) ? s : 'overview');
 
 const store = {
   get(k, d){ try { const v = localStorage.getItem('eyestats_' + k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
   set(k, v){ try { localStorage.setItem('eyestats_' + k, JSON.stringify(v)); } catch(e){} },
 };
-let state = { app: store.get('app', 'all'), includeTests: store.get('incTests', false), section: store.get('section', 'overview'), view: null, data: null, day: null, dayCache: {} };
+let state = { app: store.get('app', 'all'), includeTests: store.get('incTests', false), section: normSection(store.get('section', 'overview')), view: null, data: null, day: null, dayCache: {} };
 
 const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '–' : Math.round(n).toLocaleString('en-GB');
 const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
 const mins = s => s ? (s / 60 < 10 ? (s / 60).toFixed(1) : Math.round(s / 60)) + ' min' : '–';
 // v0.24: total play time -- minutes under an hour, then hours
 const dur = s => !s ? '0 min' : s < 3600 ? Math.round(s / 60) + ' min' : (s / 3600 < 10 ? (s / 3600).toFixed(1) : fmt(s / 3600)) + ' h';
+const chip = t => `<span class="perchip">${t}</span>`;   // v0.28: a card's period
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const dayLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
@@ -425,17 +434,17 @@ const METRICS = {
   rounds: { label: 'Rounds played', field: 'rounds', ...sumMetric('rounds'), allTime: () => sumOf(totals(), 'rounds'),
     help: 'Answers in the main game (Wine: wines played; Throne: monarchs played).', extra: extraRounds },
   play_time: { label: 'Play time', field: 'seconds', unit: 'dur', ...sumMetric('seconds'), allTime: () => sumOf(totals(), 'seconds'),
-    help: 'Total time the apps were on screen, added up over all opens. Comes from each open\'s tally, which is only sent when the app goes to the background, so opens closed with the Back button are missing (about a quarter of opens since 1 Nov, until the app fix ships).', extra: extraOpens },
+    help: 'Total time the apps were on screen, added up over all opens. Since v0.27 it also comes from each game\'s own record, so visits closed with the Back button still count.', extra: extraOpens },
   avg_time: { label: 'Avg time per open', field: 'seconds', unit: 'time',
     period: (p) => { const s = sumDays('seconds', ...periods()[p]), o = sumDays('opens', ...periods()[p]); return o ? s / o : null; },
     split: (p) => { const s = byAppDays('seconds', ...periods()[p]), o = byAppDays('opens', ...periods()[p]); const r = {}; APPS.forEach(a => r[a.id] = o[a.id] ? s[a.id] / o[a.id] : null); return r; },
     allTime: () => { const s = sumOf(totals(), 'seconds'), o = sumOf(totals(), 'opens'); return o ? s / o : null; },
     help: 'Time the app was on screen, divided by app opens.', extra: extraOpens },
-  leaderboard: { label: 'Leaderboard names', field: 'leaderboard_updates',
+  leaderboard: { label: 'On leaderboards', field: 'leaderboard_updates',
     period: (p) => sumDays('leaderboard_updates', ...periods()[p]),
     split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.leaderboard_names); return o; },
     allTime: () => sumOf(totals(), 'leaderboard_names'),
-    help: 'Names saved on the public leaderboards. The database keeps only the last update, not the sign-up date, so the daily chart counts entries updated that day.', extra: extraLeaderboard },
+    help: 'Players on the public leaderboards. Flag, Gallery, Wing, Castle and Mash add a player automatically, under a tag such as "Flag Fan 1234", the first time they beat their best streak or level up, unless they turn it off in Settings; players can pick their own name. The database keeps only the last update, so the daily chart counts entries updated that day.', extra: extraLeaderboard },
   boards: { label: 'Friends boards', field: 'boards_created', ...sumMetric('boards_created'),
     split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.boards); return o; },
     allTime: () => sumOf(totals(), 'boards'),
@@ -471,12 +480,29 @@ const METRICS = {
     period: () => null,
     split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.played_1_plus); return o; },
     allTime: () => sumOf(totals(), 'played_1_plus'),
-    help: 'Phones that have played at least one round in any session, out of all players seen. This is the "engaged" threshold used for Google Ads conversion reporting.' },
-  played_3_plus: { label: 'Played 3+ rounds (ever)', field: 'played_3_plus', allTimeOnly: true,
+    help: 'Phones that have played at least one main-game round, out of all players seen.', extra: () => sourcesCard() },
+  played_3_plus: { label: 'Played 3+ rounds in a day', field: 'played_3_plus', allTimeOnly: true,
     period: () => null,
     split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.played_3_plus); return o; },
     allTime: () => sumOf(totals(), 'played_3_plus'),
-    help: 'Phones that have played three or more rounds in a single session, out of all players seen.' },
+    help: 'Phones that have played three or more main-game rounds on one UK day, out of all players seen.', extra: () => sourcesCard() },
+  // v0.28: the apps' engaged_10_rounds mark, which the Google Ads campaigns bid on
+  played_10_plus: { label: 'Played 10+ rounds (engaged)', field: 'played_10_plus', allTimeOnly: true,
+    period: () => null,
+    split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.played_10_plus); return o; },
+    allTime: () => sumOf(totals(), 'played_10_plus'),
+    help: 'Phones that have played 10 or more main-game rounds in total: the same mark as the apps\' engaged_10_rounds event, which the Google Ads campaigns bid on (Castle, Gallery, Wing, Flag). The Players tab compares it by install source.', extra: () => sourcesCard() },
+  // v0.28: ads per active phone, and games carried on through the rewarded ad
+  ads_per_player: { label: 'Ads per active player', field: 'ad_log_shown', unit: 'dec', noSpark: true,
+    period: (p) => { const a = sumDays('ad_log_shown', ...periods()[p]), u = METRICS.active_players.period(p); return u ? a / u : null; },
+    split: (p) => { const a = byAppDays('ad_log_shown', ...periods()[p]), u = METRICS.active_players.split(p), o = {}; APPS.forEach(x => o[x.id] = u[x.id] ? a[x.id] / u[x.id] : null); return o; },
+    allTime: () => { const a = sumOf(totals(), 'ad_log_shown'), u = sumOf(uniques(), 'all_time'); return u ? a / u : null; },
+    help: 'Ads shown (from the ad log) divided by the different phones that opened an app in the period. Only Castle, Gallery, Wing and Flag show ads, so with "All apps" the players of Wine, Throne and Mash pull it down a little.', extra: extraAdLog },
+  carry_on: { label: 'Carried on after an ad', field: null, allTimeOnly: true, noSpark: true, periodLabel: `Last ${FEATURE_DAYS} days`,
+    period: () => sumOf(((state.features || {}).apps || []).filter(inApp), 'carry_earned'),
+    split: () => { const o = {}; ((state.features || {}).apps || []).forEach(r => o[r.app] = Number(r.carry_earned) || 0); return o; },
+    allTime: () => sumOf(((state.features || {}).apps || []).filter(inApp), 'carry_earned'),
+    help: `Times a player ran out of lives, watched the rewarded ad and carried on, in the last ${FEATURE_DAYS} days (from the game records). The Ads tab has how often the offer was shown and tapped.`, extra: () => carryOnCard() },
 };
 // Cohorts old enough to have had a day 7 (first opened 7+ days ago).
 function weekCohorts(){ const cut = addDays(state.data.today, -7); return state.data.retention.filter(x => x.cohort_day <= cut && x.back_week_plus !== undefined); }
@@ -485,18 +511,21 @@ function allTimeSplit(m){
   APPS.forEach(a => { state.app = a.id; o[a.id] = m.allTime(); });
   state.app = keep; return o;
 }
-const show = (m, v) => v === null || v === undefined ? '–' : m.unit === 'time' ? mins(v) : m.unit === 'dur' ? dur(v) : m.unit === 'pct' ? Math.round(v) + '%' : fmt(v);
+const show = (m, v) => v === null || v === undefined ? '–' : m.unit === 'dec' ? Number(v).toFixed(1) : m.unit === 'time' ? mins(v) : m.unit === 'dur' ? dur(v) : m.unit === 'pct' ? Math.round(v) + '%' : fmt(v);
 
 // ------------------------------------------------------------- overview
 const ROWS = [
   { title: 'Today', p: 'today', cmp: 'yesterday', cmpLabel: 'yesterday', keys: ['new_players', 'active_players', 'opens', 'rounds', 'play_time'] },
   { title: 'This week', p: 'week', cmp: 'lastWeek', cmpLabel: 'same days last week', keys: ['new_players', 'active_players', 'opens', 'rounds', 'play_time', 'avg_time'] },
-  { title: 'All time', p: 'all', keys: ['new_players', 'play_time', 'leaderboard', 'boards', 'return_rate', 'return_week'],
-    labels: { new_players: 'Players seen', return_rate: 'Came back after day 1' } },
-  { title: 'Ad log', p: 'all', keys: ['ad_devices', 'ad_launches', 'ad_shown', 'ad_failures'],
-    note: 'From the ad log (ad_events): app launches with ads on, and ads loaded, shown or failed. Ads ran in testing 23 Sep to 8 Oct, were off until 2 Nov, and are on in Castle, Gallery, Wing and Flag since then (Flag on real ad units from v1.20, 8 Nov). New players get no interstitials on their first day.' },
-  { title: 'Engagement', p: 'all', keys: ['played_1_plus', 'played_3_plus'],
-    note: '"Engaged" (played 1+ round) is the threshold used to report conversions back to Google Ads for apps with ads-conversion tracking switched on.' },
+  { title: 'All time', p: 'all', keys: ['new_players', 'rounds', 'play_time', 'leaderboard', 'boards'],
+    labels: { new_players: 'Players seen' } },
+  // v0.28: engagement and ads rows; the ad log's own figures moved to the Ads tab
+  { title: 'Engagement', p: 'all', keys: ['played_1_plus', 'played_3_plus', 'played_10_plus', 'return_rate', 'return_week'],
+    labels: { return_rate: 'Came back after day 1' },
+    note: 'Played 10+ rounds is the same mark as the apps\' engaged_10_rounds event, which the Google Ads campaigns bid on. Came back and Back day 7+ cover players who first opened in the last 60 days.' },
+  { title: 'Ads', p: 'all', keys: ['ad_shown@today', 'ad_shown@week', 'ads_per_player@week', 'carry_on'],
+    labels: { 'ad_shown@today': 'Ads shown today', 'ad_shown@week': 'Ads shown this week', 'ads_per_player@week': 'Ads per player, this week', carry_on: `Carried on after an ad (${FEATURE_DAYS} days)` },
+    note: 'From the ad log. Ads are on in Castle, Gallery, Wing and Flag. The Ads tab has the rewarded offer, interstitials and the ad log itself.' },
 ];
 // ------------------------------------------------------------- first & last use (v0.13)
 // Players counted by when they first opened an app (rows) and when they last
@@ -513,7 +542,7 @@ function flState(){
   if (!state.fl) {
     const saved = store.get('fl', {}), st = FL_DEFAULT();
     if (saved.group) st.group = saved.group;
-    if (['n', 'pct', 'r', 'rpp'].includes(saved.mode)) st.mode = saved.mode;
+    if (['n', 'pct', 'pp', 'r', 'rpp', 'ads'].includes(saved.mode)) st.mode = saved.mode;   // v0.28: pp and ads were forgotten
     if (saved.datesSet) ['firstFrom', 'firstTo', 'lastFrom', 'lastTo'].forEach(k => { st[k] = saved[k] || ''; }), st.datesSet = true;
     else if (saved.quick) { st.quick = saved.quick; st.firstFrom = flQuickFrom(saved.quick); }
     state.fl = st;
@@ -635,25 +664,35 @@ function wireFirstLast(){
 // player holds that week's bonus badge; Flag adds per-level bonus pennants.
 // The final level repeats, so it is never "passed".
 const LADDERS = {
-  gallery: { src: 'Gallery Eye v5.33', bonus: 'weekly', levels: [
+  gallery: { src: 'Gallery Eye v5.36', bonus: 'weekly', levels: [
     ['First Visit', 8, 'Best-known paintings · easy decoys'], ['Regular Visitor', 10, 'Best-known + mid · half hard decoys'],
     ['Season Ticket Holder', 16, 'Mid-fame · 85% hard decoys'], ['Gallery Guide', 18, 'Mid + least-known · 90% hard decoys'],
     ['Curator', 12, 'Least-known · all hard decoys'], ['Gallery Master', 14, 'Least-known · all hard · repeats']] },
-  castle: { src: 'Castle Eye v1.34', bonus: 'weekly', levels: [
+  castle: { src: 'Castle Eye v1.38', bonus: 'weekly', levels: [
     ['Day Tripper', 14, 'Best-known castles · easy decoys'], ["Squire's Errand", 18, 'Best-known + mid · half hard decoys'],
-    ['Wandering Knight', 18, 'Mid-fame · 85% hard decoys'], ["Baron's Envoy", 22, 'Mid + least-known · 90% hard decoys'],
+    ['Wandering Knight', 11, 'Mid-fame · 65% hard decoys · more best-known mixed in (easier from v1.35)'], ["Baron's Envoy", 22, 'Mid + least-known · 90% hard decoys'],
     ['Castellan', 20, 'Least-known · all hard decoys'], ['Master of the Keep', 24, 'Least-known · all hard · repeats']] },
-  wing: { src: 'Wing Eye v2.32', bonus: 'weekly', levels: [
+  wing: { src: 'Wing Eye v2.34', bonus: 'weekly', levels: [
     ['Backyard Birder', 14, 'Best-known birds · easy decoys'], ['Weekend Birdwatcher', 18, 'Best-known + mid · half hard decoys'],
     ['Field Naturalist', 18, 'Mid-fame · 85% hard decoys'], ['Migration Tracker', 22, 'Mid + least-known · 90% hard decoys'],
     ['Bird Bander', 20, 'Least-known · all hard decoys'], ['Master Birder', 24, 'Least-known · all hard · repeats']] },
-  flag: { src: 'Flag Eye v1.24', bonus: [0, 0, 0, 1, 2, 3, 1, 1, 2, 2, 3, 4, 2, 2, 3, 3, 4, 5], levels: [
+  flag: { src: 'Flag Eye v1.27', bonus: [0, 0, 0, 1, 2, 3, 1, 1, 2, 2, 3, 4, 2, 2, 3, 3, 4, 5], levels: [
     ['Flag Waver', 14, 'Famous flags, easy cuts'], ['Flag Bearer', 16, 'More flags, a few lookalikes'], ['Flag Spotter', 18, 'Harder flags creep in'],
     ['Flag Tracker', 20, 'Mostly scattered pieces'], ['Flag Specialist', 22, 'Lookalikes, often six choices'], ['Flag Master', 24, 'Six choices · completes Bronze'],
     ['Silver Waver', 16, 'Tier-3 flags, six choices'], ['Silver Bearer', 18, 'Tighter lookalikes'], ['Silver Spotter', 18, 'Zone rounds appear'],
     ['Silver Tracker', 20, 'More zone rounds'], ['Silver Specialist', 22, '3-flag mashups begin'], ['Silver Master', 24, 'Mashups · completes Silver'],
     ['Gold Waver', 18, 'Hardest pool, mashups'], ['Gold Bearer', 20, 'Zone rounds and mashups'], ['Gold Spotter', 20, 'Spot-the-altered-flag begins'],
     ['Gold Tracker', 22, 'Maximum decoy closeness'], ['Gold Specialist', 24, 'Every mechanic in rotation'], ['Gold Master', 26, 'Six choices · repeats']] },
+  // v0.28: Mash's Classic ladder (4 worlds of 5); the last level repeats in Remix laps
+  mash: { src: 'Mash Eye v0.9', levels: [
+    ['Spotter', 4, 'Clean halves, side by side'], ['Splicer', 4, 'Top and bottom halves'], ['Snipper', 4, 'Diagonal cuts'],
+    ['Chopper', 5, 'Any straight cut, closer decoys'], ['Blender', 5, 'Soft blended morph'],
+    ['Patchworker', 6, 'Six-piece patchwork'], ['Stripy', 6, 'Four stripes, two of each'], ["Three's a Crowd", 6, 'Chequered quarters · first three-object mashes'],
+    ['Lookalike', 6, 'Lookalike pairs, pick from 6'], ['Mash Master', 6, 'Six-piece patchwork, pick from 6'],
+    ['Smudger', 7, 'Blends of lookalikes'], ['Crazy Paving', 7, 'Nine-piece patchwork'], ['Colour Clash', 7, 'Everything the same colour'],
+    ['Ghost Train', 7, 'See-through: one object over the other'], ['Triple Masher', 7, 'Every picture is three objects'],
+    ['Triple Stripes', 8, 'Three objects in six stripes'], ['Nine Lives', 8, 'Three objects, nine pieces'], ['Spooky Twins', 8, 'See-through lookalikes'],
+    ['Mega Muddle', 8, 'Hardest cuts, always themed'], ['Grand Mash', 8, 'Three objects, any cut · repeats (Remix laps)']] },
 };
 async function loadLevels(){
   const st = lvState();
@@ -677,7 +716,7 @@ function levelsSection(){
   const cards = apps.map(a => {
     const lad = LADDERS[a], reached = L.reached.filter(r => r.app === a), att = L.attempts.filter(r => r.app === a), spd = L.speed.filter(r => r.app === a);
     const players = sumOf(reached, 'players');
-    if (!players && !att.length) return `<div class="card"><h3>${appCell({ app: a })}</h3><div class="empty">No level data from real players yet${a === 'wine' || a === 'history' ? ' (so far only test phones have played it; tick "Include test devices" to see those)' : ''}.</div></div>`;
+    if (!players && !att.length) return `<div class="card"><h3>${appCell({ app: a })}</h3><div class="empty">No level data from real players yet${a === 'wine' || a === 'history' || a === 'mash' ? ' (so far only test phones have played it, or the app is still in testing; tick "Include test devices" to see those)' : ''}.</div></div>`;
     const maxSeen = Math.max(0, ...reached.map(r => r.level), ...att.map(r => r.level));
     const n = Math.max(lad ? Math.min(lad.levels.length, Math.max(6, maxSeen + 1)) : 0, maxSeen);
     const atLeast = lv => reached.filter(r => r.level >= lv).reduce((t, r) => t + r.players, 0);
@@ -748,17 +787,20 @@ function render(){
   renderSectionTabs();
   if (state.view) return renderDetail(state.view);
   const main = document.getElementById('main');
+  // v0.28: regrouped tabs; each opens with one line saying what it answers
+  const sec = SECTIONS.find(x => x.id === state.section) || SECTIONS[0];
+  const intro = sec.intro ? `<p class="sub tabintro">${sec.intro}</p>` : '';
   if (state.section === 'day') { main.innerHTML = daySection(); wireDay(); }
-  else if (state.section === 'games') { main.innerHTML = gamesSection(); }
-  else if (state.section === 'features') { main.innerHTML = featuresSection(); }
-  else if (state.section === 'versions') { main.innerHTML = versionsSection(); }
-  else if (state.section === 'firstlast') { main.innerHTML = firstLastSection(); wireFirstLast(); }
-  else if (state.section === 'levels') { main.innerHTML = levelsSection(); wireLevels(); }
+  else if (state.section === 'players') { main.innerHTML = intro + playersSection(); wireFirstLast(); }
+  else if (state.section === 'play') { main.innerHTML = intro + playSection(); wireLevels(); }
+  else if (state.section === 'features') { main.innerHTML = intro + featuresSection(); }
+  else if (state.section === 'ads') { main.innerHTML = intro + adsSection(); }
+  else if (state.section === 'data') { main.innerHTML = intro + dataSection(); }
   else {
-    main.innerHTML = ROWS.map((row, ri) => `
+    main.innerHTML = intro + ROWS.map((row, ri) => `
       <section><h2>${row.title}</h2>${row.note ? `<p class="sub" style="margin:-4px 0 10px">${esc(row.note)}</p>` : ''}<div class="row">${row.keys.map(k => tileHtml(k, row, ri)).join('')}</div></section>`).join('');
-    main.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openDetail(t.dataset.k)));
   }
+  main.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => openDetail(t.dataset.k)));
   main.querySelectorAll('section').forEach(s => s.style.marginBottom = '22px');
 }
 document.getElementById('main').addEventListener('click', e => {   // v0.9: a day's bar opens that day
@@ -778,18 +820,19 @@ function renderSectionTabs(){
     render(); window.scrollTo(0, 0);
   }));
 }
-function tileHtml(k, row){
-  const m = METRICS[k];
-  const v = row.p === 'all' ? m.allTime() : m.period(row.p);
-  const c = row.cmp ? m.period(row.cmp) : null;
-  const split = row.p === 'all' ? allTimeSplit(m) : m.split(row.p);
+function tileHtml(spec, row){
+  const [k, own] = spec.split('@'), m = METRICS[k], p = own || row.p;   // v0.28: 'ad_shown@today'
+  const v = p === 'all' ? m.allTime() : m.period(p);
+  const c = row.cmp && !own ? m.period(row.cmp) : null;
+  const split = p === 'all' ? allTimeSplit(m) : m.split(p);
   const apps = state.app === 'all' ? APPS.filter(a => split[a.id]).map(a =>
     `<span><i style="background:${appColour(a.id)}"></i>${a.name} ${show(m, split[a.id])}</span>`).join('') : '';
-  const spark = row.p !== 'all' && m.unit !== 'pct' ? sparkline(seriesFor(m.field, shownApps()).slice(-14), shownApps()) : '';
+  const spark = p !== 'all' && m.unit !== 'pct' && !m.noSpark ? sparkline(seriesFor(m.field, shownApps()).slice(-14), shownApps()) : '';
+  const lab = (row.labels && (row.labels[spec] || row.labels[k])) || m.label;
   return `<button class="tile" type="button" data-k="${k}">
-    <span class="lab">${(row.labels && row.labels[k]) || m.label}</span>
+    <span class="lab">${esc(lab)}</span>
     <span class="num">${show(m, v)}</span>
-    ${row.cmp ? `<span class="cmp">${show(m, c)} ${row.cmpLabel}</span>` : ''}
+    ${row.cmp && !own ? `<span class="cmp">${show(m, c)} ${row.cmpLabel}</span>` : ''}
     <span class="apps">${apps}</span>${spark}</button>`;
 }
 function sparkline(series, apps){
@@ -808,49 +851,52 @@ function renderChips(){
 // ------------------------------------------------------------- games and ads
 // A game is a main-game run: from the first answer until the player runs out
 // of lives and doesn't watch the ad to carry on.
-function gamesSection(){
+// v0.28: game cards split between the Play tab (length, endings) and the Ads tab
+// (interstitials and the suggested setting).
+function gamesNotReady(){
   const g = state.games;
-  const head = `<section><h2>Games and ads</h2><p class="sub" style="margin:-4px 0 10px">Last ${GAME_DAYS} days. A game runs from the first answer until the player runs out of lives and doesn't watch the ad to carry on. Recorded from Castle v1.21, Gallery v5.19, Wing v2.19, Flag v1.15 and Wine v0.36. In Wine a round is a wine and a game ends at a spilled wine.</p>`;
-  if (!g) return head + `<div class="card"><div class="empty">Not set up yet: run <code>castle-eye/castle-eye-supabase/add-game-stats.sql</code> in Supabase's SQL Editor.</div></div></section>`;
-  const rows = g.apps.filter(inApp);
-  if (!rows.length) return head + `<div class="card"><div class="empty">No games recorded yet. They start with Castle Eye v1.21 (and only from phones with usage stats on).</div></div></section>`;
-  const num = v => v === null || v === undefined ? '–' : Number(v).toLocaleString('en-GB', { maximumFractionDigits: 1 });
-  const apps = rows.map(r => r.app);
+  if (!g) return `<div class="card"><div class="empty">Not set up yet: run <code>castle-eye/castle-eye-supabase/add-game-stats.sql</code> in Supabase's SQL Editor.</div></div>`;
+  if (!g.apps.filter(inApp).length) return `<div class="card"><div class="empty">No games recorded in the last ${GAME_DAYS} days${state.app === 'all' ? '' : ' in ' + appName(state.app)}.</div></div>`;
+  return '';
+}
+const num1 = v => v === null || v === undefined ? '–' : Number(v).toLocaleString('en-GB', { maximumFractionDigits: 1 });
+function playGameCards(){
+  const nr = gamesNotReady(); if (nr) return nr;
+  const g = state.games, rows = g.apps.filter(inApp), apps = rows.map(r => r.app), per = chip(`Last ${GAME_DAYS} days`);
   const labels = ['1–4', '5–9', '10–19', '20–29', '30–49', '50–99', '100+'];
   const series = labels.map(l => { const o = { day: l }; apps.forEach(a => { const b = g.buckets.find(x => x.app === a && x.label === l); o[a] = b ? b.games : 0; }); return o; });
-  const groups = g.groups.filter(inApp);
-  return head + `<div class="detail" style="gap:12px">
-    <div class="card"><h3>How long games last</h3><p class="hint">Rounds = answers in the game, right or wrong. Middle half = the range the middle 50% of games fall in.</p>
+  return `<div class="card"><h3>How long games last${per}</h3><p class="hint">Rounds = answers in the game, right or wrong. Middle half = the range the middle 50% of games fall in.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Games', n: 1, v: r => fmt(r.games) }, { label: 'Players', n: 1, v: r => fmt(r.players) },
-        { label: 'Avg rounds', n: 1, v: r => num(r.avg_rounds) }, { label: 'Median', n: 1, v: r => num(r.median_rounds) },
-        { label: 'Middle half', n: 1, v: r => `${num(r.p25_rounds)}–${num(r.p75_rounds)}` }, { label: 'Avg time', n: 1, v: r => mins(r.avg_seconds) },
-        { label: 'Secs / round', n: 1, v: r => num(r.seconds_per_round) }], rows)}</div>
-    <div class="card"><h3>Rounds per game</h3>${barChart(series, apps, { xLabel: r => r.day, every: 1 })}${legend(apps)}</div>
-    <div class="card"><h3>How games end</h3><p class="hint">"Left after an ad" = the app was closed or left straight after an interstitial, without answering again. Watch this one when changing the ad frequency.</p>
+        { label: 'Avg rounds', n: 1, v: r => num1(r.avg_rounds) }, { label: 'Median', n: 1, v: r => num1(r.median_rounds) },
+        { label: 'Middle half', n: 1, v: r => `${num1(r.p25_rounds)}–${num1(r.p75_rounds)}` }, { label: 'Avg time', n: 1, v: r => mins(r.avg_seconds) },
+        { label: 'Secs / round', n: 1, v: r => num1(r.seconds_per_round) }], rows)}</div>
+    <div class="card"><h3>Rounds per game${per}</h3>${barChart(series, apps, { xLabel: r => r.day, every: 1 })}${legend(apps)}</div>
+    <div class="card"><h3>How games end${per}</h3><p class="hint">"Left after an ad" = the app was closed or left straight after an interstitial, without answering again. Watch this one when changing the ad frequency.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Out of lives', n: 1, v: r => pct(r.out_of_lives, r.games) },
         { label: 'Left the app', n: 1, v: r => pct(r.left_app, r.games) }, { label: 'Left after an ad', n: 1, v: r => pct(r.left_after_ad, r.games) },
-        { label: 'Unknown', n: 1, v: r => pct(r.unknown_end, r.games) }], rows)}</div>
-    ${offerGateCard()}
-    ${streakEndsCard()}
-    <div class="card"><h3>Ads during games</h3><p class="hint">Rewarded = "watch an ad to carry on" after running out of lives.</p>
+        { label: 'Unknown', n: 1, v: r => pct(r.unknown_end, r.games) }], rows)}</div>`;
+}
+function adsGameCards(){
+  const nr = gamesNotReady(); if (nr) return nr;
+  const g = state.games, rows = g.apps.filter(inApp), groups = g.groups.filter(inApp), per = chip(`Last ${GAME_DAYS} days`);
+  return `<div class="card"><h3>Ads during games${per}</h3><p class="hint">Rewarded = "watch an ad to carry on" after running out of lives.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Interstitials per game', n: 1, v: r => r.games ? (r.interstitials / r.games).toFixed(2) : '–' },
         { label: 'Games with one', n: 1, v: r => pct(r.games_with_ad, r.games) }, { label: 'Rewarded offered', n: 1, v: r => fmt(r.rewarded_offered) },
         { label: 'Tapped', n: 1, v: r => pct(r.rewarded_tapped, r.rewarded_offered) }, { label: 'Carried on', n: 1, v: r => pct(r.rewarded_earned, r.rewarded_offered) }], rows)}</div>
-    <div class="card"><h3>Frequency test (A vs B)</h3><p class="hint">Runs while <code>interstitial_every_b</code> is set in <code>app_ad_config</code>: group B phones use that number, group A the normal one. Compare game length and "left after an ad".</p>
-      ${table([{ label: 'App', v: appCell }, { label: 'Group', v: r => r.ad_group + ' · every ' + fmt(adEvery(r.app, r.ad_group)) }, { label: 'Games', n: 1, v: r => fmt(r.games) },
-        { label: 'Avg rounds', n: 1, v: r => num(r.avg_rounds) }, { label: 'Median', n: 1, v: r => num(r.median_rounds) },
-        { label: 'Interstitials', n: 1, v: r => fmt(r.interstitials) }, { label: 'Left after an ad', n: 1, v: r => pct(r.left_after_ad, r.games) }], groups, 'No test running.')}</div>
-    <div class="card"><h3>Suggested interstitial setting</h3><p class="hint">About one interstitial per typical game, and never more often than every 3 minutes of play: the larger of the median game length and 3 minutes' worth of rounds, rounded to 5 (between 10 and 40). In every app this round-count setting (<code>interstitial_every</code>) only applies on the final level: level 6 in Castle, Gallery and Wing, level 18 in Flag. Before that, the interstitial shows when a level is completed, from <code>level_ad_from_level</code> on. No interstitials on a player's first day.</p>
+    <div class="card"><h3>Suggested interstitial setting${per}</h3><p class="hint">About one interstitial per typical game, and never more often than every 3 minutes of play: the larger of the median game length and 3 minutes' worth of rounds, rounded to 5 (between 10 and 40). In every app this round-count setting (<code>interstitial_every</code>) only applies on the final level: level 6 in Castle, Gallery and Wing, level 18 in Flag. Before that, the interstitial shows when a level is completed, from <code>level_ad_from_level</code> on. No interstitials on a player's first day.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Ads', v: r => esc(adMode(r.app)) }, { label: 'Now', n: 1, v: r => fmt(adEvery(r.app, 'A')) },
         { label: 'Suggested', n: 1, v: r => suggestEvery(r) }], rows)}</div>
-  </div></section>`;
+    <div class="card"><h3>Frequency test (A vs B)${per}</h3><p class="hint">Runs while <code>interstitial_every_b</code> is set in <code>app_ad_config</code>: group B phones use that number, group A the normal one. Compare game length and "left after an ad".</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Group', v: r => r.ad_group + ' · every ' + fmt(adEvery(r.app, r.ad_group)) }, { label: 'Games', n: 1, v: r => fmt(r.games) },
+        { label: 'Avg rounds', n: 1, v: r => num1(r.avg_rounds) }, { label: 'Median', n: 1, v: r => num1(r.median_rounds) },
+        { label: 'Interstitials', n: 1, v: r => fmt(r.interstitials) }, { label: 'Left after an ad', n: 1, v: r => pct(r.left_after_ad, r.games) }], groups, 'No test running.')}</div>`;
 }
 // ------------------------------------------------------------- features and cross-promotion
 // Bonus (weekly) rounds, collection screens, carrying on after running out of
 // lives, taps on other Eye games, and installs that came from in-app links.
 const COLLECTION_NAMES = { gallery: 'My Collection', castle: 'My Realm', wing: 'Life List', flag: 'My Atlas', wine: 'Cellar', history: 'Royal Gallery', mash: 'Junk Drawer' };
 function installFrom(r){
-  if (r.source === 'cross_promo') return r.from_app ? `Suite link in ${appName(r.from_app)}` : `Suite link (${esc(r.medium || 'unknown')})`;
+  if (r.source === 'cross_promo') return r.from_app ? `${appName(r.from_app)}: ${r.link === 'level' ? 'level-complete link' : "Home's suite row"}` : `Suite link (${esc(r.medium || 'unknown')})`;
   if (r.source === 'share') return `Shared card${r.medium ? ' · ' + esc(r.medium) : ''}`;
   if (r.source === 'board_invite') return 'Friends-board invite';
   return esc(r.source);
@@ -865,53 +911,118 @@ function installSummary(rows){
   return `<p class="hint" style="margin:10px 0 0"><b>Cross-promo installs:</b> ${fmt(n)} players played <b>${fmt(rounds)}</b> rounds, <b>${rPer(rounds, n)}</b> per install (${fmt(first)} of them on their first day).
     ${back ? `The ${fmt(back)} who came back played <b>${rPer(rr, back)}</b> rounds each, <b>${fmt(rl)}</b> of them on their later days.` : 'None has come back on a later day yet.'}</p>`;
 }
+// v0.28: the Features tab is built from cards; most read the 'screens' list
+// (every screen each app reports, from get_dashboard_features).
+const featRows = () => state.features ? state.features.apps.filter(inApp).sort((a, b) => APPS.findIndex(x => x.id === a.app) - APPS.findIndex(x => x.id === b.app)) : null;
+const featApps = () => APPS.map(a => a.id).filter(a => state.app === 'all' || a === state.app);
+const scr = (app, name) => ((state.features && state.features.screens) || []).find(x => x.app === app && x.screen === name) || null;
+const scrP = (app, name, f = 'players') => { const x = scr(app, name); return x ? Number(x[f]) || 0 : 0; };
+const activeOf = app => { const r = ((state.features && state.features.apps) || []).find(x => x.app === app); return r ? Number(r.active_players) || 0 : 0; };
+const ofActive = (n, a) => `${fmt(n)} <span class="sub">${pct(n, activeOf(a))}</span>`;
+const featNotSetUp = `<div class="card"><div class="empty">Not set up yet: run <code>dashboard/get-dashboard-features.sql</code> and <code>dashboard/dashboard-v0.28.sql</code> in Supabase's SQL Editor.</div></div>`;
 function featuresSection(){
+  if (!state.features) return `<section>${featNotSetUp}</section>`;
+  return `<section><h2>Daily habits</h2><div class="detail" style="gap:12px">${hintsCard()}${weeklyChallengeCard()}</div></section>
+    <section><h2>Leaderboards, sharing and rating</h2><div class="detail" style="gap:12px">${leaderboardsCard()}${sharingCard()}</div></section>
+    <section><h2>Collections and badges</h2><div class="detail" style="gap:12px">${collectionsCard()}</div></section>
+    <section><h2>Cross-promotion</h2><div class="detail" style="gap:12px">${tapsCard()}${installsCard()}</div></section>
+    <section><h2>Screens used</h2><div class="detail" style="gap:12px">${screensCard()}</div></section>`;
+}
+function hintsCard(){
+  const apps = featApps().filter(a => scr(a, 'hint') || scr(a, 'day_1') || scr(a, 'hint_reminder_on'));
+  const head = `<div class="card"><h3>Daily hints and days in a row${chip(`Last ${FEATURE_DAYS} days`)}</h3><p class="hint">Flag from v1.27 (17 Nov). Hints top up each day: 1 on the first day, one more for each day in a row the player comes back, up to 4; missing a day drops it back to 1. <b>Used a hint</b> = players with an open where they used at least one (the app marks the open; it doesn't send how many). <b>Day 1 … 7+</b> = players who opened the app on that many days in a row, so the drop from column to column shows how many keep a run going. <b>Evening reminder</b> = turned on the hint reminder in Settings. <b>Welcome back</b> = came back after 7+ days away.</p>`;
+  if (!apps.length) return head + `<div class="empty">No hint figures${state.app === 'all' ? '' : ' from ' + appName(state.app)} yet: only Flag has daily hints so far.</div></div>`;
+  return head + table([{ label: 'App', v: a => appCell({ app: a }) }, { label: 'Active', n: 1, v: a => fmt(activeOf(a)) },
+    { label: 'Used a hint', n: 1, v: a => ofActive(scrP(a, 'hint'), a) }, { label: 'Opens with a hint', n: 1, v: a => fmt(scrP(a, 'hint', 'opens')) },
+    ...[1, 2, 3, 4, 5, 6, 7].map(d => ({ label: d === 7 ? 'Day 7+' : 'Day ' + d, n: 1, v: a => fmt(scrP(a, 'day_' + d)) })),
+    { label: 'Evening reminder', n: 1, v: a => fmt(scrP(a, 'hint_reminder_on')) }, { label: 'Welcome back', n: 1, v: a => fmt(scrP(a, 'welcome_back')) }], apps) + '</div>';
+}
+function leaderboardsCard(){
+  const T = state.data.totals;
+  const rows = featApps().map(a => T.find(t => t.app === a)).filter(t => t && (t.leaderboard_names || t.boards || scr(t.app, 'leaderboard') || scr(t.app, 'leaders')));
+  const auto = t => Number(t.leaderboard_auto) || 0;
+  return `<div class="card"><h3>Leaderboards and friends boards${chip(`All time · opened: last ${FEATURE_DAYS} days`)}</h3><p class="hint"><b>On the board</b> = players with a row on the public leaderboard. Flag, Gallery, Wing, Castle and Mash add a player automatically the first time they beat their best streak or level up, under a tag such as "Flag Fan 1234" (<b>Automatic tag</b>), unless they've turned it off in Settings; <b>Chose a name</b> = typed their own. <b>This week</b> = on this week's board (the "This week" tab: Flag from v1.24, Gallery, Wing and Castle from their 18 Nov updates; Mash: with points this week). <b>Opened</b> = players who opened that screen in the last ${FEATURE_DAYS} days.</p>
+    ${table([{ label: 'App', v: appCell }, { label: 'On the board', n: 1, v: t => fmt(t.leaderboard_names) },
+      { label: 'Chose a name', n: 1, v: t => fmt((Number(t.leaderboard_names) || 0) - auto(t)) }, { label: 'Automatic tag', n: 1, v: t => fmt(auto(t)) },
+      { label: 'This week', n: 1, v: t => t.leaderboard_week === undefined || t.app === 'wine' || t.app === 'history' ? '–' : fmt(t.leaderboard_week) },   // Wine and Throne have no weekly board
+      { label: 'Opened the board', n: 1, v: t => ofActive(scrP(t.app, 'leaderboard') + scrP(t.app, 'leaders'), t.app) },
+      { label: 'Friends boards', n: 1, v: t => fmt(t.boards) }, { label: 'Members', n: 1, v: t => fmt(t.board_members) },
+      { label: 'Opened friends boards', n: 1, v: t => ofActive(scrP(t.app, 'friends') + scrP(t.app, 'boards'), t.app) }], rows, 'No leaderboard entries yet.')}</div>`;
+}
+function sharingCard(){
   const f = state.features;
-  const head = `<section><h2>Features and cross-promotion</h2><p class="sub" style="margin:-4px 0 10px">Last ${FEATURE_DAYS} days unless marked "all time". From the usage stats the apps already send, so only phones with usage stats on, and only from each app's usage-stats version.</p>`;
-  if (!f) return head + `<div class="card"><div class="empty">Not set up yet: run <code>dashboard/get-dashboard-features.sql</code> in Supabase's SQL Editor.</div></div></section>`;
-  const rows = f.apps.filter(inApp).sort((a, b) => APPS.findIndex(x => x.id === a.app) - APPS.findIndex(x => x.id === b.app));
+  const shareInstalls = a => f.installs.filter(i => i.source === 'share' && i.to_app === a).reduce((t, i) => t + i.players, 0);
+  const apps = featApps().filter(a => ['share_card', 'review_card', 'rate_levelup', 'rate_settings'].some(n => scr(a, n)) || shareInstalls(a));
+  return `<div class="card"><h3>Sharing and rating asks${chip(`Last ${FEATURE_DAYS} days · installs: all time`)}</h3><p class="hint"><b>Share card</b> = players shown the share card (after a new best, a level-up or a streak milestone). <b>Installs from shares</b> = new players whose install came through a shared card. <b>Asked to rate</b> = players shown the "enjoying it?" rating card. Flag v1.27 also logs which moment asked (opens, by moment) and taps on its "Rate" links on the level-up panel and in Settings.</p>
+    ${table([{ label: 'App', v: a => appCell({ app: a }) }, { label: 'Share card', n: 1, v: a => ofActive(scrP(a, 'share_card'), a) },
+      { label: 'Times shown', n: 1, v: a => fmt(scrP(a, 'share_card', 'opens')) }, { label: 'Installs from shares', n: 1, v: a => fmt(shareInstalls(a)) },
+      { label: 'Asked to rate', n: 1, v: a => ofActive(scrP(a, 'review_card'), a) },
+      { label: 'At a level-up', n: 1, v: a => fmt(scrP(a, 'review_level', 'opens')) }, { label: 'At a new best', n: 1, v: a => fmt(scrP(a, 'review_best', 'opens')) },
+      { label: 'At a milestone', n: 1, v: a => fmt(scrP(a, 'review_milestone', 'opens')) },
+      { label: 'Tapped "Rate"', n: 1, v: a => fmt(scrP(a, 'rate_levelup', 'opens') + scrP(a, 'rate_settings', 'opens')) }], apps, 'No share cards or rating asks yet.')}</div>`;
+}
+function collectionsCard(){
+  const rows = featRows();
+  return `<div class="card"><h3>Collections and the badge cabinet${chip(`Last ${FEATURE_DAYS} days`)}</h3><p class="hint">Players who opened their collection screen, and the weekly badge cabinet (Gallery, Castle, Wing, Flag). How many items each player has collected stays on the phone and isn't sent yet (that needs an app update).</p>
+    ${table([{ label: 'App', v: appCell }, { label: 'Screen', v: r => esc(COLLECTION_NAMES[r.app] || 'none') },
+      { label: 'Players', n: 1, v: r => r.coll_screen ? fmt(r.coll_players) : '–' }, { label: 'Of active', n: 1, v: r => r.coll_screen ? pct(r.coll_players, r.active_players) : '–' },
+      { label: 'Opens', n: 1, v: r => r.coll_screen ? fmt(r.coll_opens) : '–' }, { label: 'Players (all time)', n: 1, v: r => r.coll_screen ? fmt(r.coll_players_all) : '–' },
+      { label: 'Badge cabinet', n: 1, v: r => scr(r.app, 'badges') ? ofActive(scrP(r.app, 'badges'), r.app) : '–' }], rows)}</div>`;
+}
+function tapsCard(){
+  const f = state.features;
   const touches = r => state.app === 'all' || r.from_app === state.app || r.to_app === state.app;
-  const taps = f.taps.filter(touches), installs = f.installs.filter(touches);
-  const appTo = (a) => `<span style="white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${appColour(a)};margin-right:6px"></span>${appName(a)}</span>`;
+  const taps = f.taps.filter(touches);
+  const appTo = a => `<span style="white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${appColour(a)};margin-right:6px"></span>${appName(a)}</span>`;
   const tapInstalls = r => f.installs.filter(i => i.source === 'cross_promo' && i.from_app === r.from_app && i.to_app === r.to_app).reduce((t, i) => t + i.players, 0);
-  // Per-app summary, each player and each open counted once (from the database;
-  // adding up the rows per link would count a player who tapped two games twice).
   const tapsByFrom = (f.taps_from || []).filter(r => state.app === 'all' || r.from_app === state.app);
-  const adsOn = r => (r.ad_mode_all !== 'off') && r.ad_mode && r.ad_mode !== 'off';
-  const anyAdsOn = rows.some(adsOn);
-  return head + `<div class="detail" style="gap:12px">
-    <div class="card"><h3>Bonus rounds (this week's theme)</h3><p class="hint">Players who opened the weekly bonus round or answered in it. Flag Eye's bonus round started with v1.17; Flag doesn't send its bonus-round answers, so its Answers column stays at 0.</p>
-      ${table([{ label: 'App', v: appCell }, { label: 'Players', n: 1, v: r => fmt(r.bonus_players) },
-        { label: 'Of active', n: 1, v: r => pct(r.bonus_players, r.active_players) },
-        { label: 'Opens', n: 1, v: r => fmt(r.bonus_opens) }, { label: 'Answers', n: 1, v: r => fmt(r.bonus_answers) },
-        { label: 'Players (all time)', n: 1, v: r => fmt(r.bonus_players_all) }], rows)}</div>
-    ${weeklyChallengeCard()}
-    <div class="card"><h3>Collections</h3><p class="hint">Players who opened their collection screen. How many items each player has collected is kept on the phone and isn't sent yet.</p>
-      ${table([{ label: 'App', v: appCell }, { label: 'Screen', v: r => esc(COLLECTION_NAMES[r.app] || 'none') },
-        { label: 'Players', n: 1, v: r => r.coll_screen ? fmt(r.coll_players) : '–' }, { label: 'Of active', n: 1, v: r => r.coll_screen ? pct(r.coll_players, r.active_players) : '–' },
-        { label: 'Opens', n: 1, v: r => r.coll_screen ? fmt(r.coll_opens) : '–' }, { label: 'Players (all time)', n: 1, v: r => r.coll_screen ? fmt(r.coll_players_all) : '–' }], rows)}</div>
-    <div class="card"><h3>Carrying on after a streak ends</h3><p class="hint">When a player runs out of lives they're offered "watch an ad to carry on". ${anyAdsOn ? 'The offer only appears while that app\'s ads are on, after a run of at least <code>min_rounds_before_ad_offer</code> rounds, and (Castle, Gallery, Wing) not after 2 ignored offers in a row that day. Flag doesn\'t have the ignored-offer limit yet.' : '<b>Ads are off in every app, so the offer never appears and these stay at zero</b> until ads are switched on.'}</p>
-      ${table([{ label: 'App', v: appCell }, { label: 'Ads', v: r => adsOn(r) ? esc(r.ad_mode) : 'off' }, { label: 'Games', n: 1, v: r => fmt(r.games) },
-        { label: 'Ran out of lives', n: 1, v: r => fmt(r.ran_out) }, { label: 'Offered', n: 1, v: r => fmt(r.carry_offered) },
-        { label: 'Tapped', n: 1, v: r => pct(r.carry_tapped, r.carry_offered) }, { label: 'Carried on', n: 1, v: r => pct(r.carry_earned, r.carry_offered) },
-        { label: 'Games carried on', n: 1, v: r => fmt(r.games_carried_on) }], rows.filter(r => r.games || adsOn(r)), 'No games recorded in this period.')}</div>
-    <div class="card"><h3>Taps on other Eye games</h3><p class="hint">Taps on a game in Home's "More from the Eye Suite" row. Counted once per app open, so these are players and opens with a tap. Installs = players of the other game who arrived through that link (all time). Links on the level-complete panel aren't counted yet.</p>
+  return `<div class="card"><h3>Taps on other Eye games${chip(`Last ${FEATURE_DAYS} days`)}</h3><p class="hint">Taps on a game in Home's "More from the Eye Suite" row, counted once per app open, so these are players and opens with a tap. Installs = players of the other game who arrived through a link from this app (all time, either link). The level-complete panel's links don't send taps (that needs an app update), but installs through them are counted below.</p>
       ${table([{ label: 'From', v: r => appTo(r.from_app) }, { label: 'To', v: r => appTo(r.to_app) }, { label: 'Players', n: 1, v: r => fmt(r.players) },
         { label: 'Opens with a tap', n: 1, v: r => fmt(r.opens) }, { label: 'Players (all time)', n: 1, v: r => fmt(r.players_all) },
         { label: 'Installs', n: 1, v: r => fmt(tapInstalls(r)) }], taps, 'No taps yet.')}
       ${tapsByFrom.length ? `<h3 style="margin-top:16px">Per app</h3><p class="hint">Each player and each open counted once. A player who tapped two games is one player here but appears in two rows above, so Taps = the rows above added up.</p>${table([{ label: 'Tapped in', v: r => appTo(r.from_app) },
         { label: 'Players', n: 1, v: r => fmt(r.players) }, { label: 'Of active', n: 1, v: r => pct(r.players, r.active_players) },
         { label: 'Opens with a tap', n: 1, v: r => fmt(r.opens) }, { label: 'Taps', n: 1, v: r => fmt(r.taps) },
-        { label: 'Players (all time)', n: 1, v: r => fmt(r.players_all) }], tapsByFrom)}` : ''}</div>
-    <div class="card"><h3>Installs from in-app links</h3><p class="hint">New players whose Play install came through a link in one of the apps: the suite row, a shared score card or a friends-board invite. Play only passes this on for installs made through the link, after the app's usage-stats version. <b>Came back</b> = opened the app again on a later UK day, the same rule as the rest of the dashboard. <b>Rounds</b> = main-game rounds these players have played in the installed app, all time: in total and per install, then for the players who came back (per returner, and how many of those were played on their later days).</p>
+        { label: 'Players (all time)', n: 1, v: r => fmt(r.players_all) }], tapsByFrom)}` : ''}</div>`;
+}
+function installsCard(){
+  const f = state.features;
+  const touches = r => state.app === 'all' || r.from_app === state.app || r.to_app === state.app;
+  const installs = f.installs.filter(touches);
+  const appTo = a => `<span style="white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${appColour(a)};margin-right:6px"></span>${appName(a)}</span>`;
+  return `<div class="card"><h3>Installs from in-app links${chip('All time')}</h3><p class="hint">New players whose Play install came through a link in one of the apps: Home's suite row, the level-complete panel's link, a shared score card or a friends-board invite. Play only passes this on for installs made through the link. <b>Came back</b> = opened the app again on a later UK day. <b>Rounds</b> = main-game rounds these players have played in the installed app: in total and per install, then for the players who came back (per returner, and how many of those were played on their later days).</p>
       ${table([{ label: 'Installed', v: r => appTo(r.to_app) }, { label: 'Came from', v: installFrom }, { label: 'Players', n: 1, v: r => fmt(r.players) },
         { label: `Last ${FEATURE_DAYS} days`, n: 1, v: r => fmt(r.players_recent) }, { label: 'Came back', n: 1, v: r => `${fmt(r.came_back)} (${pct(r.came_back, r.players)})` },
         { label: 'Rounds', n: 1, v: r => r.rounds === undefined ? '–' : fmt(r.rounds) },
         { label: 'Per install', n: 1, v: r => r.rounds === undefined || !r.players ? '–' : rPer(r.rounds, r.players) },
         { label: 'Per returner', n: 1, v: r => r.rounds_returners === undefined || !r.came_back ? '–' : rPer(r.rounds_returners, r.came_back) },
         { label: 'Returners, later days', n: 1, v: r => r.rounds_returners_later === undefined || !r.came_back ? '–' : fmt(r.rounds_returners_later) }], installs, 'None yet.')}
-      ${installSummary(installs)}</div>
-  </div></section>`;
+      ${installSummary(installs)}</div>`;
+}
+// Friendly names for the screens the apps report (unknown ones show their code)
+const SUITE_PARTS = { galleryeye: 'gallery', castleeye: 'castle', wingeye: 'wing', flageye: 'flag', wineeye: 'wine', throneeye: 'history', masheye: 'mash' };
+const SCREEN_NAMES = { game: 'Main game', home: 'Home', weekly: 'Weekly bonus round', leaderboard: 'Leaderboard', leaders: 'Leaderboard', friends: 'Friends boards',
+  boards: 'Friends boards', levels: 'Levels panel', badges: 'Badge cabinet', share_card: 'Share card shown', review_card: 'Asked to rate', settings: 'Settings',
+  info: 'More info', atlas: 'My Atlas', coll: 'My Collection', realm: 'My Realm', life: 'Life List', cellar: 'Cellar', drawer: 'Junk Drawer', map: 'Map',
+  timeline: 'Timeline', modes: 'Game modes', mymash: 'My Mash', over: 'Game over', hint: 'Used a hint', hint_reminder_on: 'Turned on the hint reminder',
+  welcome_back: 'Welcome back (7+ days away)', review_level: 'Asked to rate: level-up', review_best: 'Asked to rate: new best', review_milestone: 'Asked to rate: milestone',
+  rate_levelup: 'Tapped "Rate" (level-up panel)', rate_settings: 'Tapped "Rate" (Settings)' };
+function screenLabel(app, n){
+  if (app === 'history' && n === 'gallery') return 'Royal Gallery';
+  if (SCREEN_NAMES[n]) return SCREEN_NAMES[n];
+  let m = /^day_(\d+)$/.exec(n); if (m) return m[1] === '7' ? 'Day 7+ in a row' : `Day ${m[1]} in a row`;
+  m = /^suite_(.+)$/.exec(n); if (m) return `Tapped ${appName(SUITE_PARTS[m[1]] || m[1])} (suite row)`;
+  return n;
+}
+function screensCard(){
+  const order = a => APPS.findIndex(x => x.id === a);
+  const rows = ((state.features && state.features.screens) || []).filter(inApp).filter(r => r.players || r.players_all)
+    .sort((a, b) => order(a.app) - order(b.app) || b.players - a.players || b.players_all - a.players_all);
+  return `<div class="card"><h3>Every screen the apps report${chip(`Last ${FEATURE_DAYS} days · and all time`)}</h3><p class="hint">Each app notes which screens were used in an open, so new features show up here before they get a card of their own. A screen counts once per open. Code = the name the app sends.</p>
+    ${table([{ label: 'App', v: appCell }, { label: 'Screen', v: r => esc(screenLabel(r.app, r.screen)) }, { label: 'Code', v: r => `<span class="sub">${esc(r.screen)}</span>` },
+      { label: 'Players', n: 1, v: r => fmt(r.players) }, { label: 'Of active', n: 1, v: r => pct(r.players, activeOf(r.app)) },
+      { label: 'Opens', n: 1, v: r => fmt(r.opens) }, { label: 'Players (all time)', n: 1, v: r => fmt(r.players_all) }], rows,
+      state.features && !state.features.screens ? 'Needs <code>dashboard/dashboard-v0.28.sql</code> run in Supabase.' : 'No screens reported yet.')}</div>`;
 }
 // ------------------------------------------------------------- versions and rounds
 // Which app versions players are on, day by day, and how many players actually
@@ -922,7 +1033,7 @@ const verCmp = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').
   for (let i = 0; i < Math.max(x.length, y.length); i++){ const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; };
 function versionsSection(){
   const v = state.versions;
-  const head = `<section><h2>Versions and rounds</h2><p class="sub" style="margin:-4px 0 10px">Last ${VERSION_DAYS} days, from app opens. Only phones on an app's usage-stats version with usage stats on are seen: older builds and players who switched usage stats off send nothing, so they can't be counted here.</p>`;
+  const head = `<section><h2>Versions and visit counts</h2><p class="sub" style="margin:-4px 0 10px">Last ${VERSION_DAYS} days, from app opens. Only phones on an app's usage-stats version with usage stats on are seen: older builds and players who switched usage stats off send nothing, so they can't be counted here.</p>`;
   if (!v) return head + `<div class="card"><div class="empty">Not set up yet: run <code>dashboard/get-dashboard-versions.sql</code> in Supabase's SQL Editor.</div></div></section>`;
   const order = a => APPS.findIndex(x => x.id === a);
   const rec = v.recording.filter(inApp).sort((a, b) => order(a.app) - order(b.app));
@@ -938,7 +1049,7 @@ function versionsSection(){
     return `<div class="card"><h3>${appName(a)}: players per day by version</h3>${barChart(series, vs, { colour: () => appColour(a), opacity: op, name: k => appName(a) + ' ' + k })}${leg}</div>`;
   }).join('');
   return head + `<div class="detail" style="gap:12px">
-    <div class="card"><h3>Who reports rounds</h3><p class="hint">Every player who opened the app in the period, in one of three groups. <b>Reported rounds</b>: at least one open sent its rounds. <b>Opened, no rounds</b>: the app sent its totals but with no answers. <b>No totals sent</b>: no open ever reached the background (app killed, crashed, or still open right now), so whether they played is unknown. Averages count reporting players only.</p>
+    <div class="card"><h3>Who sends each visit's counts${chip(`Last ${VERSION_DAYS} days`)}</h3><p class="hint">This table uses only the counts each visit sends when the app goes to the background. Since v0.27 the rest of the dashboard also takes rounds from the game records, so this is now the check on lost visit counts (an app closed with Back sends none). Every player who opened the app in the period, in one of three groups. <b>Reported rounds</b>: at least one open sent its rounds. <b>Opened, no rounds</b>: the app sent its totals but with no answers. <b>No totals sent</b>: no open ever reached the background (app killed, crashed, or still open right now), so whether they played is unknown. Averages count reporting players only.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Players', n: 1, v: r => fmt(r.active) },
         { label: 'Reported rounds', n: 1, v: r => `${fmt(r.reported)} <span class="sub">${pct(r.reported, r.active)}</span>` },
         { label: 'Opened, no rounds', n: 1, v: r => `${fmt(r.no_rounds)} <span class="sub">${pct(r.no_rounds, r.active)}</span>` },
@@ -948,7 +1059,7 @@ function versionsSection(){
         { label: 'Per open', n: 1, v: r => r.opens_with_rounds ? num(r.rounds / r.opens_with_rounds) : '–' },
         { label: 'Per playing day', n: 1, v: r => r.player_days ? num(r.rounds / r.player_days) : '–' }], rec, 'No players in this period.')}
       <p class="hint" style="margin-top:8px">Per open and per playing day count only opens and days that sent rounds.</p></div>
-    <div class="card"><h3>Versions in use</h3><p class="hint">Players per version in the period (a player who updated counts under both), the last 7 days, and how many on each version reported rounds.</p>
+    <div class="card"><h3>Versions in use${chip(`Last ${VERSION_DAYS} days`)}</h3><p class="hint">Players per version in the period (a player who updated counts under both), the last 7 days, and how many on each version reported rounds.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Version', v: r => esc(r.version) },
         { label: 'First seen', v: r => dayLabel(r.first_day) }, { label: 'Last seen', v: r => dayLabel(r.last_day) },
         { label: 'Players', n: 1, v: r => fmt(r.players) }, { label: 'Last 7 days', n: 1, v: r => fmt(r.players_7d) },
@@ -965,11 +1076,11 @@ function versionsSection(){
 // signal, not yet built (see the to-do list).
 function weeklyChallengeCard(){
   const w = state.weeklyChallenge;
-  const head = `<div class="card"><h3>Weekly challenge: "remind me next week"</h3>`;
+  const head = `<div class="card"><h3>Weekly challenge: "remind me next week"${chip(`Last ${FEATURE_DAYS} days`)}</h3>`;
   if (!w) return head + `<div class="empty">Not set up yet: the <code>get_dashboard_weekly_challenge</code> function hasn't been created in Supabase.</div></div>`;
   const order = a => APPS.findIndex(x => x.id === a);
   const rows = w.apps.filter(inApp).sort((a, b) => order(a.app) - order(b.app));
-  return head + `<p class="hint">Shown once, right after a player completes the week's 5-in-a-row badge. Opt-in rate = opted in &divide; sheet shown. Doesn't yet show whether opting in actually brings someone back to play - only that they said yes to the reminder.</p>
+  return head + `<p class="hint">Shown once, right after a player completes the week's 5-in-a-row badge. Opt-in rate = opted in &divide; sheet shown. Gallery, Castle and Wing only: Flag doesn't log these events yet. Doesn't show whether opting in brings someone back to play, only that they said yes to the reminder.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Badge completions', n: 1, v: r => fmt(r.completions) },
         { label: 'Unique completers', n: 1, v: r => fmt(r.unique_completers) }, { label: 'Sheet shown', n: 1, v: r => fmt(r.sheets_shown) },
         { label: 'Opted in', n: 1, v: r => `${fmt(r.reminder_opt_ins)} <span class="sub">${pct(r.reminder_opt_ins, r.sheets_shown)}</span>` },
@@ -983,7 +1094,7 @@ function weeklyChallengeCard(){
 // end gets one (ads off, the minimum-rounds gate, the ignored-offer back-off).
 function streakEndsCard(){
   const se = state.streakEnds;
-  const head = `<div class="card"><h3>After a streak ends: with and without the ad offer</h3>`;
+  const head = `<div class="card"><h3>After a streak ends: with and without the ad offer${chip(`Last ${GAME_DAYS} days`)}</h3>`;
   if (!se) return head + `<div class="empty">Not set up yet: run <code>dashboard/get-dashboard-streak-ends.sql</code> in Supabase's SQL Editor.</div></div>`;
   const order = a => APPS.findIndex(x => x.id === a);
   const rows = se.apps.filter(inApp).sort((a, b) => order(a.app) - order(b.app) || (b.offered - a.offered));
@@ -1078,7 +1189,7 @@ function wireDay(){
 const MIN_RUNS_FOR_GATE = 30;
 function offerGateCard(){
   const og = state.offerGate;
-  const head = `<div class="card"><h3>Suggested setting for the rewarded offer</h3>`;
+  const head = `<div class="card"><h3>Suggested setting for the rewarded offer${chip(`Last ${GAME_DAYS} days`)}</h3>`;
   if (!og) return head + `<div class="empty">Not set up yet: run <code>dashboard/get-dashboard-offer-gate.sql</code> in Supabase's SQL Editor.</div></div>`;
   const order = a => APPS.findIndex(x => x.id === a);
   const rows = og.apps.filter(inApp).sort((a, b) => order(a.app) - order(b.app));
@@ -1109,8 +1220,8 @@ function renderDetail(k){
   const m = METRICS[k], main = document.getElementById('main');
   const per = [['Today', 'today'], ['Yesterday', 'yesterday'], ['This week', 'week'], ['Last 7 days', 'last7'], ['Last 30 days', 'last30']];
   const periodsHtml = (m.unit === 'pct' || m.allTimeOnly ? [] : per.map(([l, p]) => `<div class="period"><b>${show(m, m.period(p))}</b><span>${l}</span></div>`))
-    .concat(`<div class="period"><b>${show(m, m.allTime())}</b><span>All time</span></div>`).join('');
-  const field = (k === 'avg_time' || k === 'played_1_plus' || k === 'played_3_plus' || k === 'return_week') ? null : m.field;
+    .concat(`<div class="period"><b>${show(m, m.allTime())}</b><span>${m.periodLabel || 'All time'}</span></div>`).join('');
+  const field = ['avg_time', 'played_1_plus', 'played_3_plus', 'played_10_plus', 'return_week', 'ads_per_player', 'carry_on'].includes(k) ? null : m.field;
   const chart = field ? `<div class="card"><h3>${m.label} per day, last ${DAYS} days</h3>${barChart(seriesFor(field, shownApps()), shownApps())}${legend(shownApps())}</div>` : '';
   main.innerHTML = `<div class="detail">
     <div class="dhead"><button class="btn" id="back" type="button">‹ All figures</button><h2>${m.label}${state.app === 'all' ? '' : ' · ' + appName(state.app)}</h2></div>
@@ -1124,7 +1235,7 @@ function renderDetail(k){
 }
 function byAppTable(m){
   const ps = m.unit === 'pct' || m.allTimeOnly ? [] : [['Today', 'today'], ['This week', 'week'], ['Last 30 days', 'last30']];
-  const head = `<tr><th>App</th>${ps.map(([l]) => `<th class="n">${l}</th>`).join('')}<th class="n">All time</th></tr>`;
+  const head = `<tr><th>App</th>${ps.map(([l]) => `<th class="n">${l}</th>`).join('')}<th class="n">${m.periodLabel || 'All time'}</th></tr>`;
   const allSplit = allTimeSplit(m);
   const rows = APPS.filter(a => state.app === 'all' || a.id === state.app).map(a =>
     `<tr><td><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${appColour(a.id)};margin-right:6px"></span>${a.name}</td>${ps.map(([, p]) => `<td class="n">${show(m, m.split(p)[a.id])}</td>`).join('')}<td class="n">${show(m, allSplit[a.id])}</td></tr>`).join('');
@@ -1166,31 +1277,42 @@ function grouped(rows, keyFn, sumFields){
 }
 
 // extra sections per metric
-function extraNewPlayers(){
-  const src = grouped(state.data.sources.filter(inApp), r => sourceLabel(r.source) + (r.campaign ? ' · ' + r.campaign : ''), ['players', 'this_week', 'came_back']).sort((a, b) => b.players - a.players);
-  const loc = grouped(state.data.locales.filter(inApp), r => localeLabel(r.locale), ['players']).sort((a, b) => b.players - a.players).slice(0, 15);
-  const ver = state.data.versions.filter(inApp);
-  return `<div class="grid2">
-    <div class="card"><h3>Where players came from</h3><p class="hint">From the Play install referrer. Tagged links (utm_source=…) show up here by name. Came back = opened the app again on a later UK day.</p>
-      ${table([{ label: 'Source', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.players) }, { label: 'This week', n: 1, v: r => fmt(r.this_week) }, { label: 'Came back', n: 1, v: r => pct(r.came_back, r.players) }], src)}</div>
-    <div class="card"><h3>Phone language / country</h3><p class="hint">The phone's language setting, not its location.</p>
-      ${table([{ label: 'Setting', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.players) }], loc)}</div>
-    <div class="card"><h3>App versions in use</h3>
-      ${table([{ label: 'App', v: appCell }, { label: 'Version', v: r => esc(r.version) }, { label: 'Players', n: 1, v: r => fmt(r.players) }], ver)}</div>
-  </div>`;
+function sourcesCard(){
+  const src = grouped(state.data.sources.filter(inApp), r => sourceLabel(r.source) + (r.campaign ? ' · ' + r.campaign : ''),
+    ['players', 'this_week', 'came_back', 'engaged', 'rounds_first_day']).sort((a, b) => b.players - a.players);
+  const hasNew = state.data.sources.some(r => r.engaged !== undefined);
+  return `<div class="card"><h3>Where players came from${chip('All time')}</h3><p class="hint">From the Play install referrer; tagged links (utm_source=…) show up by name, Google Ads by campaign number. <b>Came back</b> = opened the app again on a later UK day. <b>Played 10+</b> = 10 or more main-game rounds in total (the engaged mark the Google Ads campaigns bid on). <b>Rounds on day 1</b> = average main-game rounds on the player's first UK day. Compare the rows to see which sources bring players who stay.</p>
+    ${table([{ label: 'Source', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.players) }, { label: 'This week', n: 1, v: r => fmt(r.this_week) },
+      { label: 'Came back', n: 1, v: r => pct(r.came_back, r.players) },
+      ...(hasNew ? [{ label: 'Played 10+', n: 1, v: r => pct(r.engaged, r.players) }, { label: 'Rounds on day 1', n: 1, v: r => r.players ? num1(r.rounds_first_day / r.players) : '–' }] : [])], src)}</div>`;
 }
-function extraActive(){
+function localeCard(){
+  const loc = grouped(state.data.locales.filter(inApp), r => localeLabel(r.locale), ['players']).sort((a, b) => b.players - a.players).slice(0, 15);
+  return `<div class="card"><h3>Phone language / country${chip('All time · top 15')}</h3><p class="hint">The phone's language setting, not its location.</p>
+      ${table([{ label: 'Setting', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.players) }], loc)}</div>`;
+}
+function cohortCard(){
   const ret = state.data.retention.filter(inApp);
   const byDay = grouped(ret, r => r.cohort_day, ['new_players', 'back_day_1', 'back_week_plus', 'came_back']).sort((a, b) => a.key < b.key ? 1 : -1);
   // A cohort can only be judged on day N once N days have passed; until then show '–'.
   const age = r => Math.round((new Date(state.data.today + 'T12:00:00Z') - new Date(r.key + 'T12:00:00Z')) / 864e5);
   const after = (r, f, n) => age(r) < n ? '<span title="Too soon to tell">–</span>' : `${fmt(r[f])} (${pct(r[f], r.new_players)})`;
   const wk = weekCohorts().filter(inApp), wkN = sumOf(wk, 'new_players'), wkB = sumOf(wk, 'back_week_plus');
+  return `<div class="card"><h3>New players by the day they first opened${chip('Last 30 days shown')}</h3><p class="hint">A dash means it's too soon to tell: next day fills in after a day, day 7+ after 7 days.${wkN ? ` <b>Back day 7+: ${fmt(wkB)} of ${fmt(wkN)} players who first opened 7+ days ago (${pct(wkB, wkN)}).</b>` : ''}</p>
+      ${table([{ label: 'First opened', v: r => dayLabel(r.key) }, { label: 'New', n: 1, v: r => fmt(r.new_players) }, { label: 'Back next day', n: 1, v: r => after(r, 'back_day_1', 1) }, { label: 'Back day 7+', n: 1, v: r => r.back_week_plus === undefined ? '–' : after(r, 'back_week_plus', 7) }, { label: 'Ever came back', n: 1, v: r => after(r, 'came_back', 1) }], byDay.slice(0, 30), 'No new players yet.')}</div>`;
+}
+function extraNewPlayers(){
+  const ver = state.data.versions.filter(inApp);
+  return `<div class="grid2">${sourcesCard()}${localeCard()}
+    <div class="card"><h3>App versions in use${chip('Last version seen')}</h3>
+      ${table([{ label: 'App', v: appCell }, { label: 'Version', v: r => esc(r.version) }, { label: 'Players', n: 1, v: r => fmt(r.players) }], ver)}</div>
+  </div>`;
+}
+function extraActive(){
   const lv = state.data.levels.filter(inApp);
   const levels = [...new Set(lv.map(r => r.level))].sort((a, b) => a - b).map(l => { const o = { day: l }; shownApps().forEach(a => { const r = lv.find(x => x.app === a && x.level === l); o[a] = r ? r.players : 0; }); return o; });
   return `<div class="grid2">
-    <div class="card"><h3>Do new players come back?</h3><p class="hint">Players grouped by the day they first opened an app. A dash means it's too soon to tell: next day fills in after a day, day 7+ after 7 days.${wkN ? ` <b>Back day 7+: ${fmt(wkB)} of ${fmt(wkN)} players who first opened 7+ days ago (${pct(wkB, wkN)}).</b>` : ''}</p>
-      ${table([{ label: 'First opened', v: r => dayLabel(r.key) }, { label: 'New', n: 1, v: r => fmt(r.new_players) }, { label: 'Back next day', n: 1, v: r => after(r, 'back_day_1', 1) }, { label: 'Back day 7+', n: 1, v: r => r.back_week_plus === undefined ? '–' : after(r, 'back_week_plus', 7) }, { label: 'Ever came back', n: 1, v: r => after(r, 'came_back', 1) }], byDay.slice(0, 30), 'No new players yet.')}</div>
+    ${cohortCard()}
     <div class="card"><h3>Highest level reached (last 30 days)</h3><p class="hint">Each player counted once, at the highest level they reached.</p>
       ${levels.length ? barChart(levels, shownApps(), { xLabel: r => 'Level ' + r.day, every: 1 }) + legend(shownApps()) : '<div class="empty">Nothing yet.</div>'}</div>
   </div>`;
@@ -1219,7 +1341,7 @@ function extraRounds(){
 }
 function extraLeaderboard(){
   const top = state.data.leaderboard_top.filter(inApp);
-  return `<div class="card"><h3>Top of each leaderboard</h3><p class="hint">These names are already public in the apps.</p>
+  return leaderboardsCard() + `<div class="card"><h3>Top of each leaderboard</h3><p class="hint">These names are already public in the apps. Automatic tags (such as "Flag Fan 1234") belong to players who haven't picked a name.</p>
     ${table([{ label: 'App', v: appCell }, { label: 'Name', v: r => esc(r.name) }, { label: 'Best streak', n: 1, v: r => fmt(r.best_streak) }, { label: 'Level', n: 1, v: r => r.level ? fmt(r.level) : '–' }], top, 'No names yet (test devices are left out unless ticked).')}</div>`;
 }
 function extraAdLog(){
@@ -1241,11 +1363,82 @@ function extraBoards(){
   </div>`;
 }
 
+// ------------------------------------------------------------- v0.28 tabs
+function playersSection(){
+  return `<section><h2>Where players come from</h2><div class="detail" style="gap:12px">${sourcesCard()}</div></section>
+    <section><h2>Do new players come back?</h2><div class="detail" style="gap:12px">${cohortCard()}</div></section>
+    ${firstLastSection()}
+    <section><h2>Phone language</h2><div class="detail" style="gap:12px">${localeCard()}</div></section>`;
+}
+function bonusCard(){
+  const rows = featRows();
+  const head = `<div class="card"><h3>Weekly bonus round (this week's theme)${chip(`Last ${FEATURE_DAYS} days`)}</h3>`;
+  if (!rows) return head + `<div class="empty">Not set up yet: run <code>dashboard/get-dashboard-features.sql</code> in Supabase's SQL Editor.</div></div>`;
+  return head + `<p class="hint">Players who opened the weekly bonus round or answered in it. Naming five in a row earns the week's badge and an extra life for the rest of the week (Gallery, Castle, Wing, Flag). Flag's bonus round started with v1.17; it sends its answers from v1.26 (16 Nov), so its earlier answers are missing.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Players', n: 1, v: r => fmt(r.bonus_players) },
+        { label: 'Of active', n: 1, v: r => pct(r.bonus_players, r.active_players) },
+        { label: 'Opens', n: 1, v: r => fmt(r.bonus_opens) }, { label: 'Answers', n: 1, v: r => fmt(r.bonus_answers) },
+        { label: 'Players (all time)', n: 1, v: r => fmt(r.bonus_players_all) }], rows)}</div>`;
+}
+function playSection(){
+  return `<section><h2>Games</h2><p class="sub" style="margin:-4px 0 10px">A game runs from the first answer until the player runs out of lives and doesn't watch the ad to carry on. Recorded from each app's game-stats version (see the Data tab). In Wine a round is a wine and a game ends at a spilled wine; in Mash the lives are glue.</p>
+    <div class="detail" style="gap:12px">${playGameCards()}${bonusCard()}</div></section>${levelsSection()}`;
+}
+function carryOnCard(){
+  const rows = featRows();
+  const head = `<div class="card"><h3>Carrying on after running out of lives${chip(`Last ${FEATURE_DAYS} days`)}</h3>`;
+  if (!rows) return head + `<div class="empty">Not set up yet: run <code>dashboard/get-dashboard-features.sql</code> in Supabase's SQL Editor.</div></div>`;
+  const adsOn = r => (r.ad_mode_all !== 'off') && r.ad_mode && r.ad_mode !== 'off';
+  return head + `<p class="hint">When a player runs out of lives they're offered "watch an ad to carry on". The offer only appears while that app's ads are on, after a run of at least <code>min_rounds_before_ad_offer</code> rounds, and (Castle, Gallery, Wing) not after 2 ignored offers in a row that day; Flag doesn't have the ignored-offer limit yet.</p>
+      ${table([{ label: 'App', v: appCell }, { label: 'Ads', v: r => adsOn(r) ? esc(r.ad_mode) : 'off' }, { label: 'Games', n: 1, v: r => fmt(r.games) },
+        { label: 'Ran out of lives', n: 1, v: r => fmt(r.ran_out) }, { label: 'Offered', n: 1, v: r => fmt(r.carry_offered) },
+        { label: 'Tapped', n: 1, v: r => pct(r.carry_tapped, r.carry_offered) }, { label: 'Carried on', n: 1, v: r => pct(r.carry_earned, r.carry_offered) },
+        { label: 'Games carried on', n: 1, v: r => fmt(r.games_carried_on) }], rows.filter(r => r.games || adsOn(r)), 'No games recorded in this period.')}</div>`;
+}
+function adsSection(){
+  const row = { p: 'all', labels: { 'ad_shown@today': 'Ads shown today', 'ad_shown@week': 'Ads shown this week', 'ads_per_player@week': 'Ads per player, this week',
+    ad_shown: 'Ads shown (all time)', ad_devices: 'Phones in the ad log', ad_failures: 'Ad errors (all time)' } };
+  const tiles = ['ad_shown@today', 'ad_shown@week', 'ads_per_player@week', 'ad_shown', 'ad_devices', 'ad_failures'];
+  return `<section><h2>Ads shown</h2><p class="sub" style="margin:-4px 0 10px">From the ad log (ad_events). Ads are on in Castle, Gallery, Wing and Flag (since 2 Nov; Flag on real ad units from v1.20, 8 Nov) and off in Wine, Throne and Mash. New players get no interstitials on their first day. Tap a figure for its detail.</p>
+      <div class="row">${tiles.map(k => tileHtml(k, row)).join('')}</div></section>
+    <section><h2>Rewarded offer: "watch an ad to carry on"</h2><div class="detail" style="gap:12px">${carryOnCard()}${streakEndsCard()}${offerGateCard()}</div></section>
+    <section><h2>Interstitials</h2><div class="detail" style="gap:12px">${adsGameCards()}</div></section>
+    <section><h2>Ad log</h2>${extraAdLog()}</section>`;
+}
+// When each app started sending usage stats and game records (in-app versions)
+const APP_SINCE = [
+  ['gallery', 'v5.16 (19 Oct)', 'v5.19 (23 Oct)', 'On since 2 Nov'], ['castle', 'v1.19 (19 Oct)', 'v1.21 (23 Oct)', 'On since 2 Nov'],
+  ['wing', 'v2.16 (19 Oct)', 'v2.19 (1 Nov)', 'On since 2 Nov'], ['flag', 'v1.12 (19 Oct)', 'v1.15 (23 Oct)', 'On since 2 Nov (real ad units from v1.20, 8 Nov)'],
+  ['wine', 'v0.34 (19 Oct)', 'v0.36 (23 Oct)', 'Off'], ['history', 'v0.1 (24 Oct)', 'v0.1 (24 Oct)', 'Off · in testing'], ['mash', 'v0.1 (13 Nov)', 'v0.1 (13 Nov)', 'Off · in testing'],
+];
+function dataSection(){
+  const rules = [
+    '<b>Test devices.</b> Registered test phones, and every player of an app still in testing (<code>app_ad_config.in_testing</code>: Mash and Throne today), are left out unless "Include test devices" is ticked. When an app launches publicly, set its <code>in_testing</code> to false and its players count from then on.',
+    '<b>Days and weeks.</b> UK days; weeks start on Monday. The apps count their own days (ad-free first day, play days, days in a row) on the phone\'s clock, so a US evening player can still be on their first day after UK midnight.',
+    '<b>Players.</b> Each app gives a phone its own id, so a player of two apps counts once in each, and can\'t be followed from one game to another. "All apps" adds the apps up.',
+    '<b>Rounds, right answers and play time.</b> For each player and day, the larger of the visit\'s own count and the game records (since v0.27), so visits closed with the Back button still count. Wine: wines played; Throne: monarchs played. <b>Level reached</b> comes only from the visit\'s count, so it can be low until the apps send it before closing.',
+    '<b>Came back</b> = opened the app again on a later UK day. <b>Back day 7+</b> counts only players who first opened 7+ days ago. <b>Played 10+ rounds</b> = 10 or more main-game rounds in total (the apps\' engaged_10_rounds mark).',
+    '<b>Ads shown</b> come from the ad log. Castle, Gallery and Wing log AdMob\'s own "ad shown" events; Flag logs its own, so for Flag it counts interstitials shown plus rewarded ads the player chose to watch. Ads ran in testing 23 Sep to 8 Oct, were off (AdMob suspension) until 2 Nov, and have been on in Castle, Gallery, Wing and Flag since. Flag showed Google sample ads before v1.20 (8 Nov).',
+    '<b>Screens</b> (Features tab) are noted once per open, so they count opens and players, not taps.',
+    '<b>Periods.</b> Overview: today, this week and all time; charts: the last 90 days; games, features, ads and versions: the last 30 days; First &amp; last use and Levels have their own dates. Each card shows its period in the corner.',
+  ];
+  return `<section><h2>How the figures are counted</h2><div class="detail" style="gap:12px">
+      <div class="card"><ul class="rules">${rules.map(r => `<li>${r}</li>`).join('')}</ul></div>
+      <div class="card"><h3>What each app sends, and from when</h3><p class="hint">Players on older versions send nothing, and players who switch usage stats off in Settings aren't counted.</p>
+        ${table([{ label: 'App', v: r => appCell({ app: r[0] }) }, { label: 'Usage stats from', v: r => r[1] }, { label: 'Game records from', v: r => r[2] }, { label: 'Ads', v: r => r[3] }], APP_SINCE.filter(r => state.app === 'all' || r[0] === state.app))}</div>
+    </div></section>${versionsSection()}`;
+}
+
 // ------------------------------------------------------------- wiring
 const inc = document.getElementById('incTests');
 inc.checked = state.includeTests;
 inc.addEventListener('change', () => { state.includeTests = inc.checked; store.set('incTests', state.includeTests); load(); });
 document.getElementById('refresh').addEventListener('click', load);
+document.getElementById('howCounted').addEventListener('click', e => {   // v0.28: footer link to the Data tab
+  e.preventDefault(); state.view = null; state.section = 'data'; store.set('section', 'data');
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  render(); window.scrollTo(0, 0);
+});
 document.getElementById('lock').addEventListener('click', () => { localStorage.removeItem(GATE_KEY); location.reload(); });
 window.addEventListener('hashchange', () => { const k = location.hash.slice(1); state.view = METRICS[k] ? k : null; render(); });
 if (METRICS[location.hash.slice(1)]) state.view = location.hash.slice(1);
