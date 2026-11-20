@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.31</title>
+<title>Eye Suite Stats v0.32</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -126,7 +126,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.31</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.32</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -203,7 +203,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.31</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.32</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -1398,12 +1398,32 @@ function carryOnCard(){
         { label: 'Tapped', n: 1, v: r => pct(r.carry_tapped, r.carry_offered) }, { label: 'Carried on', n: 1, v: r => pct(r.carry_earned, r.carry_offered) },
         { label: 'Games carried on', n: 1, v: r => fmt(r.games_carried_on) }], rows.filter(r => r.games || adsOn(r)), 'No games recorded in this period.')}</div>`;
 }
+// v0.32: ads shown by type (interstitial or rewarded), per app, over several periods
+function adTypesCard(){
+  const T = state.data.totals;
+  const head = `<div class="card"><h3>Interstitial or rewarded${chip('Today to all time')}</h3>`;
+  if (!T.length || T[0].ad_log_inter === undefined) return head + `<div class="empty">Not set up yet: run <code>dashboard/dashboard-v0.32-ad-types.sql</code> in Supabase's SQL Editor.</div></div>`;
+  const P = [['today', 'Today'], ['yesterday', 'Yesterday'], ['week', 'This week'], ['lastWeek', 'Same days last week'], ['last30', 'Last 30 days'], ['all', 'All time']];
+  const val = (f, p) => { if (p !== 'all') return byAppDays(f, ...periods()[p]); const o = {}; T.forEach(t => o[t.app] = Number(t[f]) || 0); return o; };
+  const V = {}; P.forEach(([p]) => V[p] = { i: val('ad_log_inter', p), r: val('ad_log_reward', p) });
+  const apps = APPS.map(a => a.id).filter(a => (state.app === 'all' || a === state.app) && P.some(([p]) => V[p].i[a] || V[p].r[a]));
+  if (!apps.length) return head + `<div class="empty">No ads shown${state.app === 'all' ? '' : ' in ' + appName(state.app)} yet.</div></div>`;
+  const sum = (o, list) => list.reduce((t, a) => t + (o[a] || 0), 0);
+  const cells = (get) => P.map(([p]) => { const i = get(V[p].i), r = get(V[p].r);
+    return `<td class="n">${fmt(i)}</td><td class="n">${fmt(r)}${i + r ? ` <span class="sub">${pct(r, i + r)}</span>` : ''}</td>`; }).join('');
+  const rows = apps.map(a => `<tr><td>${appCell({ app: a })}</td>${cells(o => o[a] || 0)}</tr>`).join('')
+    + (apps.length > 1 ? `<tr><td><b>All apps</b></td>${cells(o => sum(o, apps)).replace(/<td class="n">/g, '<td class="n" style="font-weight:600">')}</tr>` : '');
+  return head + `<p class="hint"><b>Interstitial</b> = the full-screen ad between levels: shown when a level is completed, from <code>level_ad_from_level</code> on, and on the final level every <code>interstitial_every</code> rounds; never on a player's first day. <b>Rewarded</b> = the "watch an ad to carry on" ad after running out of lives; the % is rewarded's share of that period's ads. Castle, Gallery and Wing count AdMob's own "shown" events; Flag counts its own, so a Flag rewarded ad is counted when the player chooses to watch it.</p>
+    <div class="tbl"><table><tr><th rowspan="2">App</th>${P.map(([, l]) => `<th class="n" colspan="2" style="text-align:center">${l}</th>`).join('')}</tr>
+      <tr>${P.map(() => '<th class="n">Interstitial</th><th class="n">Rewarded</th>').join('')}</tr>${rows}</table></div></div>`;
+}
 function adsSection(){
   const row = { p: 'all', cmps: { 'ad_shown@today': ['yesterday', 'yesterday'], 'ad_shown@week': ['lastWeek', 'same days last week'] }, labels: { 'ad_shown@today': 'Ads shown today', 'ad_shown@week': 'Ads shown this week', 'ads_per_player@week': 'Ads per player, this week',
     ad_shown: 'Ads shown (all time)', ad_devices: 'Phones in the ad log', ad_failures: 'Ad errors (all time)' } };
   const tiles = ['ad_shown@today', 'ad_shown@week', 'ads_per_player@week', 'ad_shown', 'ad_devices', 'ad_failures'];
   return `<section><h2>Ads shown</h2><p class="sub" style="margin:-4px 0 10px">From the ad log (ad_events). Ads are on in Castle, Gallery, Wing and Flag (since 2 Nov; Flag on real ad units from v1.20, 8 Nov) and off in Wine, Throne and Mash. New players get no interstitials on their first day. Tap a figure for its detail.</p>
-      <div class="row">${tiles.map(k => tileHtml(k, row)).join('')}</div></section>
+      <div class="row">${tiles.map(k => tileHtml(k, row)).join('')}</div>
+      <div class="detail" style="gap:12px;margin-top:12px">${adTypesCard()}</div></section>
     <section><h2>Rewarded offer: "watch an ad to carry on"</h2><div class="detail" style="gap:12px">${carryOnCard()}${streakEndsCard()}${offerGateCard()}</div></section>
     <section><h2>Interstitials</h2><div class="detail" style="gap:12px">${adsGameCards()}</div></section>
     <section><h2>Ad log</h2>${extraAdLog()}</section>`;
