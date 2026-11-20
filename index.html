@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.30</title>
+<title>Eye Suite Stats v0.31</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -126,7 +126,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.30</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.31</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -203,7 +203,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.30</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.31</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -459,7 +459,8 @@ const METRICS = {
     allTime: () => sumOf(totals(), 'ad_log_launches'),
     help: 'App launches recorded by the ad log: one per launch with ads on.', extra: extraAdLog },
   ad_shown: { label: 'Ads shown', field: 'ad_log_shown', allTimeOnly: true, ...sumMetric('ad_log_shown'),
-    split: () => { const o = {}; state.data.totals.forEach(t => o[t.app] = t.ad_log_shown); return o; },
+    split: (p) => { if (p && p !== 'all' && periods()[p]) return byAppDays('ad_log_shown', ...periods()[p]);   // v0.31: today / week split
+      const o = {}; state.data.totals.forEach(t => o[t.app] = t.ad_log_shown); return o; },
     allTime: () => sumOf(totals(), 'ad_log_shown'),
     help: 'Interstitial and rewarded ads shown, from the ad log. Castle, Gallery and Wing log AdMob\'s own "ad shown" events; Flag logs its own instead, so for Flag this counts interstitials shown plus rewarded ads the player chose to watch. Flag ads before v1.20 (8 Nov) were Google sample ads, which earn nothing.', extra: extraAdLog },
   ad_failures: { label: 'Ad errors', field: 'ad_log_failures', allTimeOnly: true, ...sumMetric('ad_log_failures'),
@@ -524,6 +525,7 @@ const ROWS = [
     labels: { return_rate: 'Came back after day 1' },
     note: 'Played 10+ rounds is the same mark as the apps\' engaged_10_rounds event, which the Google Ads campaigns bid on. Came back and Back day 7+ cover players who first opened in the last 60 days.' },
   { title: 'Ads', p: 'all', keys: ['ad_shown@today', 'ad_shown@week', 'ad_shown', 'ads_per_player@week', 'carry_on'],   // v0.30: all-time ads in the Ads row
+    cmps: { 'ad_shown@today': ['yesterday', 'yesterday'], 'ad_shown@week': ['lastWeek', 'same days last week'] },
     labels: { 'ad_shown@today': 'Ads shown today', 'ad_shown@week': 'Ads shown this week', ad_shown: 'Ads shown, all time', 'ads_per_player@week': 'Ads per player, this week', carry_on: `Carried on after an ad (${FEATURE_DAYS} days)` },
     note: 'From the ad log. Ads are on in Castle, Gallery, Wing and Flag. The Ads tab has the rewarded offer, interstitials and the ad log itself.' },
 ];
@@ -823,7 +825,8 @@ function renderSectionTabs(){
 function tileHtml(spec, row){
   const [k, own] = spec.split('@'), m = METRICS[k], p = own || row.p;   // v0.28: 'ad_shown@today'
   const v = p === 'all' ? m.allTime() : m.period(p);
-  const c = row.cmp && !own ? m.period(row.cmp) : null;
+  const cm = own ? (row.cmps || {})[spec] : (row.cmp ? [row.cmp, row.cmpLabel] : null);   // v0.31: e.g. ads today vs yesterday
+  const c = cm ? m.period(cm[0]) : null;
   const split = p === 'all' ? allTimeSplit(m) : m.split(p);
   const apps = state.app === 'all' ? APPS.filter(a => split[a.id]).map(a =>
     `<span><i style="background:${appColour(a.id)}"></i>${a.name} ${show(m, split[a.id])}</span>`).join('') : '';
@@ -832,7 +835,7 @@ function tileHtml(spec, row){
   return `<button class="tile" type="button" data-k="${k}">
     <span class="lab">${esc(lab)}</span>
     <span class="num">${show(m, v)}</span>
-    ${row.cmp && !own ? `<span class="cmp">${show(m, c)} ${row.cmpLabel}</span>` : ''}
+    ${cm ? `<span class="cmp">${show(m, c)} ${cm[1]}</span>` : ''}
     <span class="apps">${apps}</span>${spark}</button>`;
 }
 function sparkline(series, apps){
@@ -1396,7 +1399,7 @@ function carryOnCard(){
         { label: 'Games carried on', n: 1, v: r => fmt(r.games_carried_on) }], rows.filter(r => r.games || adsOn(r)), 'No games recorded in this period.')}</div>`;
 }
 function adsSection(){
-  const row = { p: 'all', labels: { 'ad_shown@today': 'Ads shown today', 'ad_shown@week': 'Ads shown this week', 'ads_per_player@week': 'Ads per player, this week',
+  const row = { p: 'all', cmps: { 'ad_shown@today': ['yesterday', 'yesterday'], 'ad_shown@week': ['lastWeek', 'same days last week'] }, labels: { 'ad_shown@today': 'Ads shown today', 'ad_shown@week': 'Ads shown this week', 'ads_per_player@week': 'Ads per player, this week',
     ad_shown: 'Ads shown (all time)', ad_devices: 'Phones in the ad log', ad_failures: 'Ad errors (all time)' } };
   const tiles = ['ad_shown@today', 'ad_shown@week', 'ads_per_player@week', 'ad_shown', 'ad_devices', 'ad_failures'];
   return `<section><h2>Ads shown</h2><p class="sub" style="margin:-4px 0 10px">From the ad log (ad_events). Ads are on in Castle, Gallery, Wing and Flag (since 2 Nov; Flag on real ad units from v1.20, 8 Nov) and off in Wine, Throne and Mash. New players get no interstitials on their first day. Tap a figure for its detail.</p>
