@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.32</title>
+<title>Eye Suite Stats v0.33</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -126,7 +126,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.32</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.33</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -203,7 +203,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.32</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.33</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -1410,10 +1410,10 @@ function adTypesCard(){
   if (!apps.length) return head + `<div class="empty">No ads shown${state.app === 'all' ? '' : ' in ' + appName(state.app)} yet.</div></div>`;
   const sum = (o, list) => list.reduce((t, a) => t + (o[a] || 0), 0);
   const cells = (get) => P.map(([p]) => { const i = get(V[p].i), r = get(V[p].r);
-    return `<td class="n">${fmt(i)}</td><td class="n">${fmt(r)}${i + r ? ` <span class="sub">${pct(r, i + r)}</span>` : ''}</td>`; }).join('');
+    return `<td class="n">${fmt(i)}</td><td class="n">${fmt(r)}</td>`; }).join('');   // v0.33: no % share (too crowded)
   const rows = apps.map(a => `<tr><td>${appCell({ app: a })}</td>${cells(o => o[a] || 0)}</tr>`).join('')
     + (apps.length > 1 ? `<tr><td><b>All apps</b></td>${cells(o => sum(o, apps)).replace(/<td class="n">/g, '<td class="n" style="font-weight:600">')}</tr>` : '');
-  return head + `<p class="hint"><b>Interstitial</b> = the full-screen ad between levels: shown when a level is completed, from <code>level_ad_from_level</code> on, and on the final level every <code>interstitial_every</code> rounds; never on a player's first day. <b>Rewarded</b> = the "watch an ad to carry on" ad after running out of lives; the % is rewarded's share of that period's ads. Castle, Gallery and Wing count AdMob's own "shown" events; Flag counts its own, so a Flag rewarded ad is counted when the player chooses to watch it.</p>
+  return head + `<p class="hint"><b>Interstitial</b> = the full-screen ad between levels: shown when a level is completed, from <code>level_ad_from_level</code> on, and on the final level every <code>interstitial_every</code> rounds; never on a player's first day. <b>Rewarded</b> = the "watch an ad to carry on" ad after running out of lives. Castle, Gallery and Wing count AdMob's own "shown" events; Flag counts its own, so a Flag rewarded ad is counted when the player chooses to watch it.</p>
     <div class="tbl"><table><tr><th rowspan="2">App</th>${P.map(([, l]) => `<th class="n" colspan="2" style="text-align:center">${l}</th>`).join('')}</tr>
       <tr>${P.map(() => '<th class="n">Interstitial</th><th class="n">Rewarded</th>').join('')}</tr>${rows}</table></div></div>`;
 }
