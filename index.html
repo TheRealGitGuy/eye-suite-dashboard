@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.33</title>
+<title>Eye Suite Stats v0.34</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -126,7 +126,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.33</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.34</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -203,7 +203,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.33</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.34</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -886,7 +886,7 @@ function adsGameCards(){
       ${table([{ label: 'App', v: appCell }, { label: 'Interstitials per game', n: 1, v: r => r.games ? (r.interstitials / r.games).toFixed(2) : '–' },
         { label: 'Games with one', n: 1, v: r => pct(r.games_with_ad, r.games) }, { label: 'Rewarded offered', n: 1, v: r => fmt(r.rewarded_offered) },
         { label: 'Tapped', n: 1, v: r => pct(r.rewarded_tapped, r.rewarded_offered) }, { label: 'Carried on', n: 1, v: r => pct(r.rewarded_earned, r.rewarded_offered) }], rows)}</div>
-    <div class="card"><h3>Suggested interstitial setting${per}</h3><p class="hint">About one interstitial per typical game, and never more often than every 3 minutes of play: the larger of the median game length and 3 minutes' worth of rounds, rounded to 5 (between 10 and 40). In every app this round-count setting (<code>interstitial_every</code>) only applies on the final level: level 6 in Castle, Gallery and Wing, level 18 in Flag. Before that, the interstitial shows when a level is completed, from <code>level_ad_from_level</code> on. No interstitials on a player's first day.</p>
+    <div class="card"><h3>Suggested interstitial setting${per}</h3><p class="hint">About one interstitial per typical game, and never more often than every 3 minutes of play: the larger of the median game length and 3 minutes' worth of rounds, rounded to 5 (between 10 and 40). This round-count setting (<code>interstitial_every</code>) applies on every level from a player's second day in Gallery v5.37, Castle v1.39 and Wing v2.35 (20 Nov); in older versions and in Flag it applies only on the final level (level 6, or 18 in Flag). An interstitial also shows when a level is completed, from <code>level_ad_from_level</code> on; from those versions it comes before the share or rating card, which now shows only when no ad did. No interstitials on a player's first day.</p>
       ${table([{ label: 'App', v: appCell }, { label: 'Ads', v: r => esc(adMode(r.app)) }, { label: 'Now', n: 1, v: r => fmt(adEvery(r.app, 'A')) },
         { label: 'Suggested', n: 1, v: r => suggestEvery(r) }], rows)}</div>
     <div class="card"><h3>Frequency test (A vs B)${per}</h3><p class="hint">Runs while <code>interstitial_every_b</code> is set in <code>app_ad_config</code>: group B phones use that number, group A the normal one. Compare game length and "left after an ad".</p>
@@ -956,9 +956,10 @@ function sharingCard(){
   const f = state.features;
   const shareInstalls = a => f.installs.filter(i => i.source === 'share' && i.to_app === a).reduce((t, i) => t + i.players, 0);
   const apps = featApps().filter(a => ['share_card', 'review_card', 'rate_levelup', 'rate_settings'].some(n => scr(a, n)) || shareInstalls(a));
-  return `<div class="card"><h3>Sharing and rating asks${chip(`Last ${FEATURE_DAYS} days · installs: all time`)}</h3><p class="hint"><b>Share card</b> = players shown the share card (after a new best, a level-up or a streak milestone). <b>Installs from shares</b> = new players whose install came through a shared card. <b>Asked to rate</b> = players shown the "enjoying it?" rating card. Flag v1.27 also logs which moment asked (opens, by moment) and taps on its "Rate" links on the level-up panel and in Settings.</p>
+  return `<div class="card"><h3>Sharing and rating asks${chip(`Last ${FEATURE_DAYS} days · installs: all time`)}</h3><p class="hint"><b>Share card</b> = players shown the share card (after a new best, a level-up or a streak milestone; from Gallery v5.37, Castle v1.39 and Wing v2.35 a level-up shows it only when no ad was shown). <b>Tapped Share</b> = players who then chose to share (logged from those versions). <b>Installs from shares</b> = new players whose install came through a shared card. <b>Asked to rate</b> = players shown the "enjoying it?" rating card. Flag v1.27 also logs which moment asked (opens, by moment) and taps on its "Rate" links on the level-up panel and in Settings.</p>
     ${table([{ label: 'App', v: a => appCell({ app: a }) }, { label: 'Share card', n: 1, v: a => ofActive(scrP(a, 'share_card'), a) },
-      { label: 'Times shown', n: 1, v: a => fmt(scrP(a, 'share_card', 'opens')) }, { label: 'Installs from shares', n: 1, v: a => fmt(shareInstalls(a)) },
+      { label: 'Times shown', n: 1, v: a => fmt(scrP(a, 'share_card', 'opens')) }, { label: 'Tapped Share', n: 1, v: a => fmt(scrP(a, 'share_tap')) },   // v0.34
+      { label: 'Installs from shares', n: 1, v: a => fmt(shareInstalls(a)) },
       { label: 'Asked to rate', n: 1, v: a => ofActive(scrP(a, 'review_card'), a) },
       { label: 'At a level-up', n: 1, v: a => fmt(scrP(a, 'review_level', 'opens')) }, { label: 'At a new best', n: 1, v: a => fmt(scrP(a, 'review_best', 'opens')) },
       { label: 'At a milestone', n: 1, v: a => fmt(scrP(a, 'review_milestone', 'opens')) },
@@ -1009,7 +1010,7 @@ const SCREEN_NAMES = { game: 'Main game', home: 'Home', weekly: 'Weekly bonus ro
   info: 'More info', atlas: 'My Atlas', coll: 'My Collection', realm: 'My Realm', life: 'Life List', cellar: 'Cellar', drawer: 'Junk Drawer', map: 'Map',
   timeline: 'Timeline', modes: 'Game modes', mymash: 'My Mash', over: 'Game over', hint: 'Used a hint', hint_reminder_on: 'Turned on the hint reminder',
   welcome_back: 'Welcome back (7+ days away)', review_level: 'Asked to rate: level-up', review_best: 'Asked to rate: new best', review_milestone: 'Asked to rate: milestone',
-  rate_levelup: 'Tapped "Rate" (level-up panel)', rate_settings: 'Tapped "Rate" (Settings)' };
+  share_tap: 'Tapped Share', rate_levelup: 'Tapped "Rate" (level-up panel)', rate_settings: 'Tapped "Rate" (Settings)' };
 function screenLabel(app, n){
   if (app === 'history' && n === 'gallery') return 'Royal Gallery';
   if (SCREEN_NAMES[n]) return SCREEN_NAMES[n];
@@ -1413,7 +1414,7 @@ function adTypesCard(){
     return `<td class="n">${fmt(i)}</td><td class="n">${fmt(r)}</td>`; }).join('');   // v0.33: no % share (too crowded)
   const rows = apps.map(a => `<tr><td>${appCell({ app: a })}</td>${cells(o => o[a] || 0)}</tr>`).join('')
     + (apps.length > 1 ? `<tr><td><b>All apps</b></td>${cells(o => sum(o, apps)).replace(/<td class="n">/g, '<td class="n" style="font-weight:600">')}</tr>` : '');
-  return head + `<p class="hint"><b>Interstitial</b> = the full-screen ad between levels: shown when a level is completed, from <code>level_ad_from_level</code> on, and on the final level every <code>interstitial_every</code> rounds; never on a player's first day. <b>Rewarded</b> = the "watch an ad to carry on" ad after running out of lives. Castle, Gallery and Wing count AdMob's own "shown" events; Flag counts its own, so a Flag rewarded ad is counted when the player chooses to watch it.</p>
+  return head + `<p class="hint"><b>Interstitial</b> = the full-screen ad: shown when a level is completed (from <code>level_ad_from_level</code> on), and every <code>interstitial_every</code> rounds (on every level from Gallery v5.37, Castle v1.39 and Wing v2.35; the final level only before that and in Flag); never on a player's first day. <b>Rewarded</b> = the "watch an ad to carry on" ad after running out of lives. Castle, Gallery and Wing count AdMob's own "shown" events; Flag counts its own, so a Flag rewarded ad is counted when the player chooses to watch it.</p>
     <div class="tbl"><table><tr><th rowspan="2">App</th>${P.map(([, l]) => `<th class="n" colspan="2" style="text-align:center">${l}</th>`).join('')}</tr>
       <tr>${P.map(() => '<th class="n">Interstitial</th><th class="n">Rewarded</th>').join('')}</tr>${rows}</table></div></div>`;
 }
