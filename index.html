@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.38</title>
+<title>Eye Suite Stats v0.39</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -136,7 +136,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.38</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.39</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -213,7 +213,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.38</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.39</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -1498,16 +1498,16 @@ const TRENDS = [
   { k: 'next', group: 'back', label: 'Back the next day', unit: 'pct', min: 20, lag: 1,
     get: (pred, a, b) => trendCohort(pred, a, b, 'back_day_1'),
     help: 'Of the players who first opened in the 7 days, the share who opened again the day after. Plotted by the day they first opened.' },
-  { k: 'day7', group: 'back', label: 'Back on day 7', unit: 'pct', min: 20, lag: 7,
-    get: (pred, a, b) => trendCohort(pred, a, b, 'back_day_7'),
-    help: 'Of the players who first opened in the 7 days, the share who opened again exactly a week later. Every group gets the same time, so older groups aren\'t favoured (Back day 7+ on the Overview keeps counting).' },
-  // v0.37: longer-term returns
-  { k: 'day15', group: 'back', label: 'Back on day 15', unit: 'pct', min: 20, lag: 15,
-    get: (pred, a, b) => trendCohort(pred, a, b, 'back_day_15'),
-    help: 'Of the players who first opened in the 7 days, the share who opened again exactly 15 days later.' },
-  { k: 'day30', group: 'back', label: 'Back on day 30', unit: 'pct', min: 20, lag: 30,
-    get: (pred, a, b) => trendCohort(pred, a, b, 'back_day_30'),
-    help: 'Of the players who first opened in the 7 days, the share who opened again exactly 30 days later. Visit records start on 20 Oct, so the first point appears once the players of 20\u201326 Oct have had 30 days (from 26 Nov).' },
+  // v0.39 (Guy): "or later", not "exactly on the day"
+  { k: 'day7', group: 'back', label: 'Back after a week (day 7+)', unit: 'pct', min: 20, lag: 7,
+    get: (pred, a, b) => trendCohort(pred, a, b, 'back_week_plus'),
+    help: 'Of the players who first opened in the 7 days, the share who have opened the app again 7 or more days after their first day. Players who started earlier have had longer to come back, so the older points read a little higher.' },
+  { k: 'day15', group: 'back', label: 'Back after 15 days (day 15+)', unit: 'pct', min: 20, lag: 15,
+    get: (pred, a, b) => trendCohort(pred, a, b, 'back_15_plus'),
+    help: 'Of the players who first opened in the 7 days, the share who have opened the app again 15 or more days after their first day.' },
+  { k: 'day30', group: 'back', label: 'Back after 30 days (day 30+)', unit: 'pct', min: 20, lag: 30,
+    get: (pred, a, b) => trendCohort(pred, a, b, 'back_month_plus'),
+    help: 'Of the players who first opened in the 7 days, the share who have opened the app again 30 or more days after their first day. Visit records start on 20 Oct, so the first point appears once the players of 20\u201326 Oct have had 30 days (from 26 Nov).' },
   // v0.38: are the most committed players still here?
   { k: 'heavy', group: 'back', label: 'Heavy players still playing', unit: 'pct', min: 5,
     get: (pred, a, b) => { const r = ptRow(pred, b); return { v: r && Number(r.heavy) ? 100 * r.heavy_active / r.heavy : null, base: r ? Number(r.heavy) : 0, n: r ? `${r.heavy_active} of ${r.heavy}` : '' }; },
@@ -1578,7 +1578,7 @@ function trendsSection(){
   const rows = TRENDS.map(m => { const c = ch[m.k]; return { m, c }; });
   const head = `<div class="card"><h3>Is engagement rising or falling? ${chip(scope + ' · last 14 days vs the 14 before')}</h3>
     <p class="verdict">${word}${known.length ? `: ${up} of ${known.length} engagement measures up, ${down} down, ${known.length - up - down} steady` : ''}</p>
-    <p class="hint">${baseLine(ch)} Engagement = how much each player plays, whether they come back (days 1, 7, 15 and 30), and whether they use the leaderboards and bonus round. A change counts when it moves more than 10% (or for a percentage, 10% of its value). Fewer than 20 players behind a figure shows as too few to tell.</p>
+    <p class="hint">${baseLine(ch)} Engagement = how much each player plays, whether they come back (the next day, and after 7, 15 and 30 days), and whether they use the leaderboards and bonus round. A change counts when it moves more than 10% (or for a percentage, 10% of its value). Fewer than 20 players behind a figure shows as too few to tell.</p>
     ${table([{ label: 'Measure', v: r => esc(r.m.label) }, { label: '14 days before', n: 1, v: r => r.c.b ? trendShow(r.m, r.c.b.v) : '–' }, { label: 'Last 14 days', n: 1, v: r => r.c.r ? trendShow(r.m, r.c.r.v) : '–' },
       { label: 'Change', n: 1, v: r => `<span class="tchg ${r.c.dir}">${r.c.dir === 'na' ? esc(r.c.text) : `${r.c.dir === 'up' ? '▲' : r.c.dir === 'down' ? '▼' : '●'} ${r.c.by}`}</span>` }], rows)}
     <div class="tmarks">${TREND_MARKS.map(([d, t], i) => `<span><b>${i + 1}</b> ${dayLabel(d)}: ${esc(t)}</span>`).join('')}</div></div>`;
