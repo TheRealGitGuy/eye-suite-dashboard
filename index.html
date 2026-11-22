@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.35</title>
+<title>Eye Suite Stats v0.36</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -68,6 +68,16 @@ h2{font:italic 700 19px var(--serif);margin:0 0 10px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;min-width:0}
 .card h3{margin:0 0 10px;font-size:14px;font-weight:700}
 .card p.hint{margin:0 0 10px;font-size:12px;color:var(--soft)}
+/* v0.36: Trends tab */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.tcard h3{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.tnow{font-size:22px;font-weight:700;margin:-4px 0 2px}
+.tchg{font-size:12px;font-weight:700}
+.tchg.up{color:var(--good)} .tchg.down{color:var(--bad)} .tchg.flat,.tchg.na{color:var(--soft)}
+.verdict{font:700 22px var(--serif);margin:0 0 6px}
+.tline{width:100%;height:auto;display:block;margin-top:6px}
+.tline text{font:10px var(--sans);fill:var(--soft)}
+.tmarks{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--soft);margin-top:8px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
 .chart{width:100%;height:auto;display:block}
 .chart text{fill:var(--soft);font:11px var(--sans)}
@@ -126,7 +136,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.35</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.36</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -203,7 +213,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.35</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.36</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -244,6 +254,7 @@ const appColour = id => `var(--${id})`;
 // claude/eye-suite-dashboard-review-v0.28-proposal.md); old saved tabs map across.
 const SECTIONS = [
   { id: 'overview', label: 'Overview', intro: 'How the apps are doing: today, this week and all time. Tap a figure for its detail.' },
+  { id: 'trends', label: 'Trends', intro: 'Is engagement rising or falling? Each line is a running 7-day figure, so one busy or quiet day doesn\'t swing it. Per-player figures, so a jump in new players doesn\'t hide how much each one plays.' },   // v0.36
   { id: 'players', label: 'Players', intro: 'Who arrives, where from, and whether they stay.' },
   { id: 'play', label: 'Play', intro: 'How players play: how long games last, how they end, the weekly bonus round and how far players get up the levels.' },
   { id: 'features', label: 'Features', intro: 'Which features players use: hints and days in a row, the weekly challenge, leaderboards, sharing, collections, cross-promotion, and every screen the apps report.' },
@@ -800,6 +811,7 @@ function render(){
   const sec = SECTIONS.find(x => x.id === state.section) || SECTIONS[0];
   const intro = sec.intro ? `<p class="sub tabintro">${sec.intro}</p>` : '';
   if (state.section === 'day') { main.innerHTML = daySection(); wireDay(); }
+  else if (state.section === 'trends') { main.innerHTML = intro + trendsSection(); }   // v0.36
   else if (state.section === 'players') { main.innerHTML = intro + playersSection(); wireFirstLast(); }
   else if (state.section === 'play') { main.innerHTML = intro + playSection(); wireLevels(); }
   else if (state.section === 'features') { main.innerHTML = intro + featuresSection(); }
@@ -1436,6 +1448,116 @@ function adsSection(){
     <section><h2>Interstitials</h2><div class="detail" style="gap:12px">${adsGameCards()}</div></section>
     <section><h2>Ad log</h2>${extraAdLog()}</section>`;
 }
+
+// ------------------------------------------------------------- trends (v0.36)
+// "Does engagement rise or fall over time?" Every point is a running 7-day
+// figure ending that day. Rates are per active player-day (or per new player),
+// so growth in installs doesn't look like players engaging more. The verdict
+// compares the last 14 complete days with the 14 before.
+const TREND_START = '2026-10-20';   // first full day of visit records
+const TREND_MARKS = [
+  ['2026-11-02', 'ads switched on'], ['2026-11-12', 'Google Ads bids changed'],
+  ['2026-11-15', 'Flag 18 levels + weekly board'], ['2026-11-18', 'leaderboard names automatic'], ['2026-11-20', 'ad before the share card'],
+];
+const dayDiff = (a, b) => Math.round((new Date(b + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 864e5);
+function trendDaily(pred, from, to){
+  const d = state.data.daily.filter(r => pred(r) && r.day >= from && r.day <= to);
+  const s = f => d.reduce((t, r) => t + (Number(r[f]) || 0), 0);
+  return { s, pd: s('active_players'), days: dayDiff(from, to) + 1 };
+}
+function trendCohort(pred, from, to, field){
+  const r = state.data.retention.filter(x => pred(x) && x.cohort_day >= from && x.cohort_day <= to && x[field] !== undefined);
+  const n = sumOf(r, 'new_players'); return { v: n ? 100 * sumOf(r, field) / n : null, base: n };
+}
+const perPd = (f, k = 1) => (pred, a, b) => { const w = trendDaily(pred, a, b); return { v: w.pd ? k * w.s(f) / w.pd : null, base: w.pd }; };
+// group: reach (how many) · play (how much each plays) · back (do they return) · features · ads
+const TRENDS = [
+  { k: 'players', group: 'reach', label: 'Players a day', unit: 'dec', min: 7,
+    get: (pred, a, b) => { const w = trendDaily(pred, a, b); return { v: w.pd / w.days, base: w.pd }; },
+    help: 'Average number of different phones that opened an app each day.' },
+  { k: 'newp', group: 'reach', label: 'New players a week', unit: 'n', min: 1,
+    get: (pred, a, b) => { const w = trendDaily(pred, a, b); return { v: w.s('new_players') * 7 / w.days, base: w.s('new_players') }; },
+    help: 'Phones opening an app for the first time, per 7 days. Mostly Google Ads installs.' },
+  { k: 'rounds', group: 'play', label: 'Rounds per player a day', unit: 'dec', min: 20, get: perPd('rounds'),
+    help: 'Main-game rounds divided by player-days (one player on one day).' },
+  { k: 'mins', group: 'play', label: 'Minutes per player a day', unit: 'dec', min: 20, get: perPd('seconds', 1 / 60),
+    help: 'Play time divided by player-days.' },
+  { k: 'opens', group: 'play', label: 'Opens per player a day', unit: 'dec2', min: 20, get: perPd('opens'),
+    help: 'Visits divided by player-days: above 1 means players come back later the same day.' },
+  { k: 'next', group: 'back', label: 'Back the next day', unit: 'pct', min: 20, lag: 1,
+    get: (pred, a, b) => trendCohort(pred, a, b, 'back_day_1'),
+    help: 'Of the players who first opened in the 7 days, the share who opened again the day after. Plotted by the day they first opened.' },
+  { k: 'day7', group: 'back', label: 'Back on day 7', unit: 'pct', min: 20, lag: 7,
+    get: (pred, a, b) => trendCohort(pred, a, b, 'back_day_7'),
+    help: 'Of the players who first opened in the 7 days, the share who opened again exactly a week later. Every group gets the same time, so older groups aren\'t favoured (Back day 7+ on the Overview keeps counting).' },
+  { k: 'lb', group: 'features', label: 'Leaderboard updates per 100 player-days', unit: 'dec', min: 20, get: perPd('leaderboard_updates', 100),
+    help: 'Scores sent to the leaderboards. Rises as players join, automatically since the 15–18 Nov releases.' },
+  { k: 'bonus', group: 'features', label: 'Bonus rounds per 100 player-days', unit: 'dec', min: 20, get: perPd('weekly_rounds', 100),
+    help: 'Weekly bonus rounds played. Builds before Flag v1.26 and the Back-button gap undercount these.' },
+  { k: 'ads', group: 'ads', label: 'Ads per player a day', unit: 'dec2', min: 20, get: perPd('ad_log_shown'),
+    help: 'From the ad log. Ads are on in Castle, Gallery, Wing and Flag only. Rising here is the ad changes working, not players engaging more.' },
+];
+const trendShow = (m, v) => v === null || v === undefined ? '–' : m.unit === 'pct' ? Math.round(v) + '%' : m.unit === 'dec2' ? v.toFixed(2) : m.unit === 'dec' ? (v < 10 ? v.toFixed(1) : fmt(v)) : fmt(v);
+function trendEnd(m){ return addDays(state.data.today, -1 - (m.lag || 0)); }
+function trendChange(m, pred){
+  const end = trendEnd(m);
+  const rFrom = addDays(end, -13), bTo = addDays(end, -14), bFrom = [addDays(end, -27), TREND_START].sort()[1];
+  if (dayDiff(bFrom, bTo) < 6) return { dir: 'na', text: 'not enough history yet' };
+  const r = m.get(pred, rFrom, end), b = m.get(pred, bFrom, bTo);
+  if (r.v === null || b.v === null || r.base < m.min || b.base < m.min) return { dir: 'na', text: 'too few players to tell', r, b };
+  const rel = b.v ? (r.v - b.v) / b.v : (r.v ? 1 : 0);
+  const dir = rel > 0.1 ? 'up' : rel < -0.1 ? 'down' : 'flat';
+  const by = m.unit === 'pct' ? `${r.v - b.v >= 0 ? '+' : ''}${Math.round(r.v - b.v)} pts` : `${rel >= 0 ? '+' : ''}${Math.round(rel * 100)}%`;
+  return { dir, r, b, text: `${dir === 'up' ? '▲' : dir === 'down' ? '▼' : '●'} ${by} on the 14 days before`, by };
+}
+function trendSeries(m, pred){
+  const end = trendEnd(m), pts = [];
+  for (let e = addDays(TREND_START, 6); e <= end; e = addDays(e, 1)) { const g = m.get(pred, addDays(e, -6), e); pts.push({ day: e, v: g.base >= m.min ? g.v : null }); }   // a point needs as many players behind it as the verdict does
+  return pts;
+}
+function trendLine(m, main, others){
+  const days = []; for (let e = addDays(TREND_START, 6); e <= addDays(state.data.today, -1); e = addDays(e, 1)) days.push(e);
+  const W = 360, H = 150, L = 34, R = 34, T = 14, B = 20;
+  const all = [...main, ...others.flatMap(o => o.pts)].map(p => p.v).filter(v => v !== null);
+  const max = Math.max(m.unit === 'pct' ? 10 : 0.1, ...all), step = m.unit === 'pct' ? Math.max(5, niceStep(max)) : niceStepDec(max), top = Math.ceil(max / step) * step;
+  const x = d => L + (W - L - R) * days.indexOf(d) / Math.max(1, days.length - 1), y = v => T + (H - T - B) * (1 - v / top);
+  const path = pts => { let d = '', pen = false; pts.forEach(p => { if (p.v === null || days.indexOf(p.day) < 0) { pen = false; return; } d += `${pen ? 'L' : 'M'}${x(p.day).toFixed(1)},${y(p.v).toFixed(1)}`; pen = true; }); return d; };
+  let g = '';
+  for (let v = 0; v <= top + 1e-9; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"></line><text x="${L - 5}" y="${y(v) + 3}" text-anchor="end">${m.unit === 'pct' ? Math.round(v) + '%' : +v.toFixed(2)}</text>`;
+  TREND_MARKS.forEach(([d], i) => { if (days.indexOf(d) < 0) return; g += `<line x1="${x(d)}" x2="${x(d)}" y1="${T - 4}" y2="${H - B}" stroke="var(--soft)" stroke-dasharray="2 3" opacity=".6"></line><text x="${x(d)}" y="${T - 5}" text-anchor="middle">${i + 1}</text>`; });
+  others.forEach(o => { const d = path(o.pts); if (d) g += `<path d="${d}" fill="none" stroke="${appColour(o.app)}" stroke-width="1.3" opacity=".45"><title>${appName(o.app)}</title></path>`; });
+  const md = path(main); if (md) g += `<path d="${md}" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linejoin="round"></path>`;
+  const last = [...main].reverse().find(p => p.v !== null);
+  if (last) g += `<circle cx="${x(last.day)}" cy="${y(last.v)}" r="3.5" fill="var(--accent)"></circle><text x="${x(last.day) + 5}" y="${y(last.v) + 3}" style="font-weight:700;fill:var(--ink)">${trendShow(m, last.v)}</text>`;
+  main.forEach(p => { if (p.v !== null) g += `<circle cx="${x(p.day)}" cy="${y(p.v)}" r="6" fill="transparent"><title>7 days to ${dayLabel(p.day)}: ${trendShow(m, p.v)}</title></circle>`; });
+  const lab = [days[0], days[Math.floor(days.length / 2)], days[days.length - 1]];
+  lab.forEach((d, i) => { if (d) g += `<text x="${x(d)}" y="${H - 5}" text-anchor="${['start', 'middle', 'end'][i]}">${dayLabel(d)}</text>`; });
+  return `<svg class="tline" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(m.label)} over time">${g}</svg>`;
+}
+function niceStepDec(max){ const raw = max / 4, p = Math.pow(10, Math.floor(Math.log10(raw))); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+function trendsSection(){
+  const pred = inApp, eng = TRENDS.filter(m => ['play', 'back', 'features'].includes(m.group));
+  const ch = Object.fromEntries(TRENDS.map(m => [m.k, trendChange(m, pred)]));
+  const known = eng.filter(m => ch[m.k].dir !== 'na'), up = known.filter(m => ch[m.k].dir === 'up').length, down = known.filter(m => ch[m.k].dir === 'down').length;
+  const word = !known.length ? 'Too early to tell' : up >= down + 2 ? 'Rising' : down >= up + 2 ? 'Falling' : up === down && up === 0 ? 'Steady' : 'Mixed';
+  const reach = ch.players, scope = state.app === 'all' ? 'all apps' : appName(state.app);
+  const rows = TRENDS.map(m => { const c = ch[m.k]; return { m, c }; });
+  const head = `<div class="card"><h3>Is engagement rising or falling? ${chip(scope + ' · last 14 days vs the 14 before')}</h3>
+    <p class="verdict">${word}${known.length ? `: ${up} of ${known.length} engagement measures up, ${down} down, ${known.length - up - down} steady` : ''}</p>
+    <p class="hint">Engagement = how much each player plays, whether they come back, and whether they use the leaderboards and bonus round. ${reach.dir !== 'na' ? `Separately, reach is <b>${reach.dir === 'up' ? 'up' : reach.dir === 'down' ? 'down' : 'steady'}</b>: ${trendShow(TRENDS[0], reach.r.v)} players a day, against ${trendShow(TRENDS[0], reach.b.v)}.` : ''} A change counts when it moves more than 10% (or for a percentage, 10% of its value). Fewer than 20 players behind a figure shows as too few to tell.</p>
+    ${table([{ label: 'Measure', v: r => esc(r.m.label) }, { label: '14 days before', n: 1, v: r => r.c.b ? trendShow(r.m, r.c.b.v) : '–' }, { label: 'Last 14 days', n: 1, v: r => r.c.r ? trendShow(r.m, r.c.r.v) : '–' },
+      { label: 'Change', n: 1, v: r => `<span class="tchg ${r.c.dir}">${r.c.dir === 'na' ? esc(r.c.text) : `${r.c.dir === 'up' ? '▲' : r.c.dir === 'down' ? '▼' : '●'} ${r.c.by}`}</span>` }], rows)}
+    <div class="tmarks">${TREND_MARKS.map(([d, t], i) => `<span><b>${i + 1}</b> ${dayLabel(d)}: ${esc(t)}</span>`).join('')}</div></div>`;
+  const others = m => state.app === 'all' ? APPS.map(a => ({ app: a.id, pts: trendSeries(m, r => r.app === a.id) })).filter(o => o.pts.some(p => p.v !== null)) : [];
+  const groups = [['reach', 'How many play'], ['play', 'How much each player plays'], ['back', 'Whether new players come back'], ['features', 'Feature use'], ['ads', 'Ads']];
+  const cards = groups.map(([gk, gt]) => `<section style="margin-top:18px"><h2>${gt}</h2><div class="tgrid">${TRENDS.filter(m => m.group === gk).map(m => {
+    const c = ch[m.k], main = trendSeries(m, pred);
+    return `<div class="card tcard"><h3><span>${esc(m.label)}</span><span class="tchg ${c.dir}">${esc(c.dir === 'na' ? c.text : c.text.split(' on ')[0])}</span></h3>
+      <p class="hint" style="margin-bottom:0">${esc(m.help)}${m.lag ? ` Shown up to ${dayLabel(trendEnd(m))}, the last group old enough.` : ''}</p>${trendLine(m, main, others(m))}</div>`; }).join('')}</div></section>`).join('');
+  const leg = state.app === 'all' ? `<p class="sub" style="margin:10px 0 0">Bold line: ${scope}. Thin lines: each app on its own (shown where it has enough players). Dashed lines: the changes numbered above.</p>` : '';
+  return `<section>${head}</section>${cards}${leg}`;
+}
+
 // When each app started sending usage stats and game records (in-app versions)
 const APP_SINCE = [
   ['gallery', 'v5.16 (19 Oct)', 'v5.19 (23 Oct)', 'On since 2 Nov'], ['castle', 'v1.19 (19 Oct)', 'v1.21 (23 Oct)', 'On since 2 Nov'],
