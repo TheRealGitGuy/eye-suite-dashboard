@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Cage Six v0.8</title>
+<title>Cage Six v0.9</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,800&display=swap" rel="stylesheet">
 <style>
@@ -53,6 +53,17 @@ nav button.on{background:var(--ink);color:var(--paper)}
 .tools button{border:0;background:var(--card);border-radius:11px;padding:8px 1px 6px;font:600 10.5px 'DM Sans',system-ui,sans-serif;color:var(--ink);cursor:pointer;box-shadow:0 1px 0 var(--line)}
 .tools button em{display:block;font-style:normal;font-size:18px;line-height:1.2}
 .tools button.on{background:var(--acc);color:#fff}
+.hintbox{display:none;margin-top:12px;background:var(--card);border-radius:14px;padding:12px 14px 12px;box-shadow:0 1px 0 var(--line);border-left:5px solid var(--acc)}
+.hintbox.show{display:block}
+.hintbox .hh{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px;margin-bottom:6px}
+.hintbox .hh button{border:0;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:var(--muted);padding:0 4px}
+.hintbox .ht{font-size:15px;line-height:1.5;margin:0 0 10px}
+.hintbox ol{margin:0 0 10px;padding-left:22px;font-size:14px;line-height:1.5}
+.hintbox .hb{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hintbox .hb .btn{padding:9px 14px;font-size:13.5px}
+.hintbox .lnk{border:0;background:none;color:var(--muted);text-decoration:underline;font:600 12.5px 'DM Sans',system-ui,sans-serif;cursor:pointer;margin-left:auto}
+.cell.hlf{box-shadow:inset 0 0 0 3px var(--acc)}
+.cell.hlt{background:color-mix(in srgb,var(--acc) 20%,#fff)!important}
 .donebar{display:none;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:0 1px 0 var(--line);font-weight:700}
 .donebar.show{display:flex}
 .donebar span{color:var(--acc)}
@@ -94,7 +105,7 @@ th{font-size:11px;color:var(--muted);font-weight:600}
 <body>
 <div class="app">
   <header>
-    <div class="brand">Cage Six <small>v0.8</small></div>
+    <div class="brand">Cage Six <small>v0.9</small></div>
     <nav><button data-v="play" class="on">Play</button><button data-v="stats">Stats</button><button data-v="how">How it's made</button></nav>
   </header>
 
@@ -108,6 +119,7 @@ th{font-size:11px;color:var(--muted);font-weight:600}
       <div class="board" id="board"></div>
       <div class="cover" id="cover"></div>
     </div>
+    <div class="hintbox" id="hintbox"><div class="hh"><span>💡 Hint</span><button id="hclose" aria-label="Close hint">×</button></div><div id="hbody"></div></div>
     <div class="donebar" id="donebar"><span id="donetxt">Solved ✓</span><div style="display:flex;gap:8px"><button class="btn alt" id="replay">Play again</button><button class="btn" id="donenext">Next puzzle</button></div></div>
     <div class="pad" id="pad"></div>
     <div class="tools">
@@ -147,6 +159,9 @@ th{font-size:11px;color:var(--muted);font-weight:600}
         <tr><td><span class="chip" style="background:var(--super)">Super hard</span></td><td style="text-align:left;padding-left:10px">All of the above get stuck. You must reason "if this cell were 4… that breaks something", i.e. trial and contradiction, at least once.</td></tr>
       </table>
     </div>
+    <div class="card"><h3>How hints work</h3>
+      <p>Hint acts like a tutor. It looks at your grid <i>and your notes</i>, finds the simplest logical next step and explains it. First you get a nudge (e.g. "Look at column 4. Where can the 5 go?") with the relevant squares outlined. Tap <b>Explain</b> or Hint again for the full reasoning, and <b>Apply</b> to make the move for you. It checks first for mistakes: a wrong answer, or notes that have ruled out the real digit. On the hardest puzzles it uses a "what if" test, showing step by step why an option breaks the puzzle. <b>Reveal a square</b> is still there as a last resort. Any hint stops that solve from counting as a best time.</p>
+    </div>
     <div class="card"><h3>What is saved</h3>
       <p>Your progress is stored in cookies on this device: puzzles started and solved per level, best / average / last times, hints, checks and mistakes, a daily solving streak, which puzzle numbers you've solved, and your unfinished grid on each level (so you can switch levels and come back). If this browser blocks cookies, the app falls back to local browser storage, and says so on the Stats page.</p>
     </div>
@@ -156,6 +171,205 @@ th{font-size:11px;color:var(--muted);font-weight:600}
 <div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
 <div class="toast" id="toast"></div>
 
+<script>
+// ===== Cage Six hint tutor: finds the next human-style step and explains it =====
+const HINT = (() => {
+  const ALL = 126, bit = v => 1 << v, R = i => (i / 6) | 0, C = i => i % 6;
+  const nm = i => `R${R(i) + 1}C${C(i) + 1}`;
+  const digits = m => [1, 2, 3, 4, 5, 6].filter(v => m & bit(v));
+  const pop = m => digits(m).length;
+  const list = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  const dl = m => list(digits(m).map(String));
+  const cells = a => list(a.map(nm));
+  const LINES = [];
+  for (let r = 0; r < 6; r++) LINES.push({ name: `row ${r + 1}`, cells: [0, 1, 2, 3, 4, 5].map(c => r * 6 + c) });
+  for (let c = 0; c < 6; c++) LINES.push({ name: `column ${c + 1}`, cells: [0, 1, 2, 3, 4, 5].map(r => r * 6 + c) });
+  const opSym = op => op === '-' ? '−' : op;
+  const cname = cg => `${cg.t}${opSym(cg.op)}`;
+
+  function tuples(cg, cand) {
+    const out = [], cs = cg.cells, k = cs.length, cur = [];
+    const rec = d => {
+      if (d === k) {
+        const v = cur; let ok;
+        if (cg.op === '+') ok = v.reduce((a, b) => a + b, 0) === cg.t;
+        else if (cg.op === '×') ok = v.reduce((a, b) => a * b, 1) === cg.t;
+        else if (cg.op === '-') ok = Math.abs(v[0] - v[1]) === cg.t;
+        else if (cg.op === '÷') ok = Math.max(...v) / Math.min(...v) === cg.t;
+        else ok = v[0] === cg.t;
+        if (ok) out.push(v.slice()); return;
+      }
+      for (let x = 1; x <= 6; x++) {
+        if (!(cand[cs[d]] & bit(x))) continue;
+        let clash = false;
+        for (let e = 0; e < d; e++) if (cur[e] === x && (R(cs[e]) === R(cs[d]) || C(cs[e]) === C(cs[d]))) { clash = true; break; }
+        if (!clash) { cur[d] = x; rec(d + 1); }
+      }
+    };
+    rec(0); return out;
+  }
+  const setsText = (cg, tps) => {
+    const join = cg.op === '×' ? '×' : cg.op === '+' ? '+' : ' & ';
+    return list([...new Set(tps.map(t => t.slice().sort((a, b) => a - b).join(join)))]);
+  };
+
+  // Effective candidates: placed digit, else the player's notes, else everything not already placed in the row/column
+  function effective(vals, notes) {
+    return vals.map((v, i) => {
+      if (v) return bit(v);
+      if (notes[i]) return notes[i];
+      let m = ALL;
+      for (let j = 0; j < 36; j++) if (j !== i && vals[j] && (R(j) === R(i) || C(j) === C(i))) m &= ~bit(vals[j]);
+      return m;
+    });
+  }
+
+  // ---- find one step. Each step: {kind, nudge, text, focus, targets, place:{i,v}|null, elim:[[i,mask]], bad?}
+  function contradiction(cand, cages) {
+    for (let i = 0; i < 36; i++) if (!cand[i]) return { text: `${nm(i)} would have no possible digit left`, focus: [i] };
+    for (const L of LINES) for (let v = 1; v <= 6; v++) if (!L.cells.some(i => cand[i] & bit(v))) return { text: `${L.name} would have nowhere left for a ${v}`, focus: L.cells };
+    for (const L of LINES) for (let a = 0; a < 6; a++) for (let b = a + 1; b < 6; b++) {
+      const x = L.cells[a], y = L.cells[b];
+      if (pop(cand[x]) === 1 && cand[x] === cand[y]) return { text: `${nm(x)} and ${nm(y)} would both be ${digits(cand[x])[0]} in ${L.name}`, focus: [x, y] };
+    }
+    for (const cg of cages) if (!tuples(cg, cand).length) return { text: `the ${cname(cg)} cage could no longer make its total`, focus: cg.cells };
+    return null;
+  }
+
+  function findStep(cand, cages, vals, inTrial) {
+    // 1. a solved square whose digit still sits in the notes of its row/column
+    for (let i = 0; i < 36; i++) if (pop(cand[i]) === 1) {
+      const v = digits(cand[i])[0], hit = [];
+      for (let j = 0; j < 36; j++) if (j !== i && (R(j) === R(i) || C(j) === C(i)) && (cand[j] & cand[i])) hit.push(j);
+      if (hit.length && (inTrial || vals[i])) return { kind: 'tidy', focus: [i], targets: hit, place: null, elim: hit.map(j => [j, cand[i]]),
+        nudge: `${nm(i)} is ${v}. Some notes in its row or column still include ${v}.`,
+        text: `${nm(i)} is ${v}, so no other square in its row or column can be ${v}. Remove ${v} from ${cells(hit)}.`,
+        short: `${nm(i)} must be ${v}, so ${v} leaves ${cells(hit)}` };
+    }
+    // 2. naked single
+    if (!inTrial) for (let i = 0; i < 36; i++) if (!vals[i] && pop(cand[i]) === 1) {
+      const v = digits(cand[i])[0];
+      return { kind: 'single', focus: [i], targets: [i], place: { i, v }, elim: [],
+        nudge: `One square has only one possibility left. Look at ${nm(i)}.`,
+        text: `${nm(i)} has only ${v} left as a possibility, so it must be ${v}.`, short: `${nm(i)} must be ${v}` };
+    }
+    // 3. hidden single
+    for (const L of LINES) for (let v = 1; v <= 6; v++) {
+      const w = L.cells.filter(i => cand[i] & bit(v));
+      if (w.length === 1 && !vals[w[0]] && cand[w[0]] !== bit(v)) return { kind: 'hidden', focus: L.cells, targets: [w[0]], place: { i: w[0], v }, elim: [],
+        nudge: `Look at ${L.name}. Where can the ${v} go?`,
+        text: `In ${L.name}, ${nm(w[0])} is the only square that can still be ${v}. Every row and column needs a ${v}, so ${nm(w[0])} = ${v}.`,
+        short: `${v} only fits ${nm(w[0])} in ${L.name}` };
+    }
+    // 4/5. cage combinations (small cages first)
+    for (const big of [false, true]) for (const cg of cages) {
+      if ((cg.cells.length > 2) !== big) continue;
+      const tp = tuples(cg, cand);
+      if (!tp.length) continue;
+      const keep = cg.cells.map((_, e) => tp.reduce((m, t) => m | bit(t[e]), 0));
+      const el = cg.cells.map((i, e) => [i, cand[i] & ~keep[e]]).filter(x => x[1]);
+      if (!el.length) continue;
+      const removed = list(el.map(([i, m]) => `${dl(m)} from ${nm(i)}`));
+      return { kind: 'cage', focus: cg.cells, targets: el.map(x => x[0]), place: null, elim: el,
+        nudge: `Think about which digits can make the ${cname(cg)} cage.`,
+        text: `With the options left, the ${cname(cg)} cage can only be made from ${setsText(cg, tp)}. That rules out ${removed}.`,
+        short: `the ${cname(cg)} cage can only be ${setsText(cg, tp)}, which removes ${removed}` };
+    }
+    // 6. pointing: a cage must put a digit in part of a line
+    for (const cg of cages) {
+      if (cg.cells.length < 2) continue;
+      const tp = tuples(cg, cand); if (!tp.length) continue;
+      const groups = {};
+      cg.cells.forEach((i, e) => { (groups['r' + R(i)] ||= []).push(e); (groups['c' + C(i)] ||= []).push(e); });
+      for (const g in groups) {
+        const es = groups[g];
+        let must = ALL; tp.forEach(t => { let m = 0; es.forEach(e => m |= bit(t[e])); must &= m; });
+        if (!must) continue;
+        const L = g[0] === 'r' ? LINES[+g.slice(1)] : LINES[6 + +g.slice(1)];
+        const inC = new Set(es.map(e => cg.cells[e]));
+        const hit = L.cells.filter(i => !inC.has(i) && (cand[i] & must));
+        if (!hit.length) continue;
+        return { kind: 'point', focus: [...inC], targets: hit, place: null, elim: hit.map(i => [i, cand[i] & must]),
+          nudge: `The ${cname(cg)} cage must contain a ${dl(must)} in ${L.name}. What does that mean for the rest of ${L.name}?`,
+          text: `Every way of making the ${cname(cg)} cage (${setsText(cg, tp)}) puts ${dl(must)} in its part of ${L.name} (${cells([...inC])}). So ${dl(must)} can't go anywhere else in ${L.name}: remove it from ${cells(hit)}.`,
+          short: `the ${cname(cg)} cage must hold ${dl(must)} in ${L.name}, so it leaves ${cells(hit)}` };
+      }
+    }
+    // 7. naked pair
+    for (const L of LINES) {
+      const un = L.cells.filter(i => pop(cand[i]) > 1);
+      for (let a = 0; a < un.length; a++) for (let b = a + 1; b < un.length; b++) {
+        const m = cand[un[a]] | cand[un[b]];
+        if (pop(m) !== 2) continue;
+        const hit = un.filter(i => i !== un[a] && i !== un[b] && (cand[i] & m));
+        if (!hit.length) continue;
+        return { kind: 'pair', focus: [un[a], un[b]], targets: hit, place: null, elim: hit.map(i => [i, cand[i] & m]),
+          nudge: `Look for two squares in ${L.name} that share the same two options.`,
+          text: `${nm(un[a])} and ${nm(un[b])} can only be ${dl(m)}, so between them they use up ${dl(m)} in ${L.name}. Remove ${dl(m)} from ${cells(hit)}.`,
+          short: `${nm(un[a])} & ${nm(un[b])} take ${dl(m)}, so they leave ${cells(hit)}` };
+      }
+    }
+    return null;
+  }
+  const applyStep = (cand, st) => { if (st.place) cand[st.place.i] = bit(st.place.v); st.elim.forEach(([i, m]) => cand[i] &= ~m); };
+
+  // 8. "what if" – assume a value, follow simple steps until something breaks
+  function trialStep(cand, cages, vals) {
+    const order = [...Array(36).keys()].filter(i => !vals[i] && pop(cand[i]) > 1).sort((a, b) => pop(cand[a]) - pop(cand[b]));
+    let best = null;
+    const t0 = Date.now();
+    for (const i of order) for (const v of digits(cand[i])) {
+      if (Date.now() - t0 > 1500) break;
+      const c = cand.slice(); c[i] = bit(v);
+      const chain = []; let bad = contradiction(c, cages);
+      for (let s = 0; s < 30 && !bad; s++) {
+        const st = findStep(c, cages, new Array(36).fill(0), true);
+        if (!st) break;
+        applyStep(c, st); chain.push(st.kind === 'tidy' && st.focus[0] === i ? st.short.replace(' must be ', ' = ') : st.short); bad = contradiction(c, cages);
+      }
+      if (bad && (!best || chain.length < best.chain.length)) best = { i, v, chain, bad };
+    }
+    if (!best) return null;
+    const { i, v, chain, bad } = best;
+    const steps = chain.length > 6 ? [...chain.slice(0, 5), `…${chain.length - 5} more simple steps…`] : chain;
+    return { kind: 'trial', focus: [i], targets: [i], place: null, elim: [[i, bit(v)]],
+      nudge: `No simple rule works here. Try asking "what if ${nm(i)} were ${v}?"`,
+      text: `Suppose ${nm(i)} were ${v}. Then ${steps.length ? steps.join('; then ') + '. But then ' : ''}${bad.text}. That can't happen, so ${nm(i)} is not ${v}: remove ${v} from its notes.`,
+      chain: steps, bad: bad.text };
+  }
+
+  // ---- main entry: look at the player's grid and return the most useful hint
+  function next(puz, vals, notes) {
+    const sol = puz.sol;
+    const wrong = vals.map((v, i) => v && v !== sol[i] ? i : -1).filter(i => i >= 0);
+    if (wrong.length) return { kind: 'mistake', focus: wrong, targets: wrong, place: null, elim: [], fix: 'erase',
+      nudge: `Something in your grid isn't right. Have another look at ${wrong.length > 1 ? 'the highlighted squares' : nm(wrong[0])}.`,
+      text: `${cells(wrong)} ${wrong.length > 1 ? "don't" : "doesn't"} match the solution. Erase ${wrong.length > 1 ? 'them' : 'it'} and work it out again. Apply erases ${wrong.length > 1 ? 'them' : 'it'} for you.` };
+    const missing = notes.map((m, i) => !vals[i] && m && !(m & bit(sol[i])) ? i : -1).filter(i => i >= 0);
+    if (missing.length) return { kind: 'notes', focus: missing, targets: missing, place: null, elim: [], fix: 'notes',
+      nudge: `Your notes in ${missing.length > 1 ? 'the highlighted squares' : nm(missing[0])} rule out a digit that's still possible.`,
+      text: `${missing.map(i => `${nm(i)} has lost its ${sol[i]}`).join('; ')}. Something earlier removed ${missing.length > 1 ? 'those digits' : 'that digit'} too soon. Apply puts ${missing.length > 1 ? 'them' : 'it'} back.` };
+    const cand = effective(vals, notes);
+    return findStep(cand, puz.cages, vals, false) || trialStep(cand, puz.cages, vals) ||
+      { kind: 'none', focus: [], targets: [], place: null, elim: [], nudge: 'No step found. Try filling in notes for each square first.', text: 'No step found. Try filling in notes for each square first.' };
+  }
+
+  // turn a hint into new vals/notes
+  function apply(h, puz, vals, notes) {
+    const v = vals.slice(), n = notes.slice(), cand = effective(vals, notes);
+    if (h.fix === 'erase') h.targets.forEach(i => { v[i] = 0; });
+    else if (h.fix === 'notes') h.targets.forEach(i => { n[i] |= bit(puz.sol[i]); });
+    else {
+      if (h.place) { v[h.place.i] = h.place.v; n[h.place.i] = 0; }
+      h.elim.forEach(([i, m]) => { if (!v[i]) n[i] = (n[i] || cand[i]) & ~m; });
+    }
+    return { vals: v, notes: n };
+  }
+  return { next, apply, nm };
+})();
+if (typeof module !== 'undefined') module.exports = HINT;
+
+</script>
 <script id="kk-core">
 // ===== KenKen-style 6x6 engine: generator, solver, grader =====
 const KK = (() => {
@@ -571,12 +785,12 @@ function validPuzzle(p) {
 }
 
 // ---------- Game state ----------
-let G = null, view = 'play', paused = false, notesMode = false, sel = -1, cells = [], wrongFlash = null, rightFlash = null, flashT;
+let HN = null, hintStage = 0, G = null, view = 'play', paused = false, notesMode = false, sel = -1, cells = [], wrongFlash = null, rightFlash = null, flashT;
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 function saveCur() {
   if (!G || G.solved) return;
-  Store.set('kk6_c_' + LSHORT[G.level], JSON.stringify({ n: G.n, v: G.vals.join(''), o: G.notes.map(m => B64[m >> 1]).join(''), e: G.elapsed | 0, h: [...G.hinted], s: G.started ? 1 : 0, k: G.checked }));
+  Store.set('kk6_c_' + LSHORT[G.level], JSON.stringify({ n: G.n, v: G.vals.join(''), o: G.notes.map(m => B64[m >> 1]).join(''), e: G.elapsed | 0, h: [...G.hinted], s: G.started ? 1 : 0, k: G.checked, u: G.used }));
 }
 function loadCur(l, n) {
   try { const c = JSON.parse(Store.get('kk6_c_' + LSHORT[l])); if (c && c.n === n) return c; } catch (e) {}
@@ -591,7 +805,7 @@ function openPuzzle(l, n) {
   document.documentElement.style.setProperty('--acc', `var(--${l})`);
   renderLevels(); closeModal();
   const my = ++openSeq;
-  G = null; sel = -1; paused = false; notesMode = false; wrongFlash = rightFlash = null;
+  closeHint(); G = null; sel = -1; paused = false; notesMode = false; wrongFlash = rightFlash = null;
   $('donebar').classList.remove('show'); $('pad').style.display = ''; document.querySelector('.tools').style.display = '';
   $('pzname').textContent = `#${pad4(n)}`; $('time').textContent = '0:00';
   showCover('Building puzzle…');
@@ -605,11 +819,11 @@ function openPuzzle(l, n) {
     if (my !== openSeq) return;
     if (!validPuzzle(puz)) throw new Error('invalid puzzle');
     const owner = new Array(36); puz.cages.forEach((c, k) => c.cells.forEach(i => owner[i] = k));
-    const g = { level: l, n, puz, owner, vals: new Array(36).fill(0), notes: new Array(36).fill(0), hinted: new Set(), elapsed: 0, started: false, solved: false, undo: [], checked: 0 };
+    const g = { level: l, n, puz, owner, vals: new Array(36).fill(0), notes: new Array(36).fill(0), hinted: new Set(), elapsed: 0, started: false, solved: false, undo: [], checked: 0, used: 0 };
     const c = loadCur(l, n);
     if (c) try {
       const v = String(c.v).split('').map(Number), o = String(c.o).split('').map(ch => Math.max(0, B64.indexOf(ch)) << 1);
-      if (v.length === 36 && o.length === 36) { g.vals = v; g.notes = o; g.elapsed = +c.e || 0; g.hinted = new Set(c.h || []); g.started = !!c.s; g.checked = c.k || 0; }
+      if (v.length === 36 && o.length === 36) { g.vals = v; g.notes = o; g.elapsed = +c.e || 0; g.hinted = new Set(c.h || []); g.started = !!c.s; g.checked = c.k || 0; g.used = c.u || 0; }
     } catch (e) {}
     G = g; buildBoard(); hideCover(); refresh();
     if (DONE[l].has(n) && !c) toast(`You've solved ${LNAME[l]} #${n} before — play again or press › for a new one`);
@@ -654,7 +868,7 @@ function refresh() {
     const r = (i / 6) | 0, c = i % 6, d = cells[i], v = vals[i];
     let bad = false;
     if (v) for (let j = 0; j < 36; j++) if (j !== i && vals[j] === v && (((j / 6) | 0) === r || j % 6 === c)) { bad = true; break; }
-    d.className = 'cell' + (i === sel ? ' sel' : sv && v === sv ? ' same' : (r === sr || c === sc) ? ' peer' : '') + (bad ? ' bad' : '') + (hinted.has(i) ? ' hint' : '') + (wrongFlash && wrongFlash.has(i) ? ' wrong' : '') + (rightFlash && rightFlash.has(i) ? ' right' : '');
+    d.className = 'cell' + (i === sel ? ' sel' : sv && v === sv ? ' same' : (r === sr || c === sc) ? ' peer' : '') + (bad ? ' bad' : '') + (hinted.has(i) ? ' hint' : '') + (wrongFlash && wrongFlash.has(i) ? ' wrong' : '') + (rightFlash && rightFlash.has(i) ? ' right' : '') + (HN && HN.focus.includes(i) ? ' hlf' : '') + (HN && HN.targets.includes(i) ? ' hlt' : '');
     d.querySelector('.v').textContent = v || '';
     const nd = d.querySelector('.notes');
     nd.innerHTML = v ? '' : [1, 2, 3, 4, 5, 6].map(x => `<span>${notes[i] & (1 << x) ? x : ''}</span>`).join('');
@@ -673,7 +887,7 @@ function hideCover() { $('cover').classList.remove('show'); }
 
 // ---------- Input ----------
 function select(i) { if (!G || paused || G.solved) return; sel = i; refresh(); }
-function snapshot() { G.undo.push({ v: G.vals.slice(), o: G.notes.slice(), h: [...G.hinted] }); if (G.undo.length > 300) G.undo.shift(); }
+function snapshot() { closeHint(); G.undo.push({ v: G.vals.slice(), o: G.notes.slice(), h: [...G.hinted] }); if (G.undo.length > 300) G.undo.shift(); }
 function markStarted() {
   S.last = Date.now(); if (!S.first) S.first = S.last;
   if (!G.started) { G.started = true; S.L[G.level].p++; }
@@ -698,17 +912,51 @@ function allNotes() {
 }
 function erase() { if (!G || paused || G.solved || sel < 0 || G.hinted.has(sel)) return; snapshot(); G.vals[sel] = 0; G.notes[sel] = 0; refresh(); saveCur(); }
 function undo() { if (!G || paused || G.solved || !G.undo.length) return; const u = G.undo.pop(); G.vals = u.v; G.notes = u.o; G.hinted = new Set(u.h); refresh(); saveCur(); }
+// ---------- Hint tutor ----------
+const esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+function closeHint() { HN = null; hintStage = 0; const b = $('hintbox'); if (b) b.classList.remove('show'); }
 function hint() {
+  if (!G || paused || G.solved) return;
+  if (HN && hintStage === 1) { hintStage = 2; renderHint(); return; } // second tap = explain
+  $('hbody').innerHTML = '<p class="ht">Thinking…</p>'; $('hintbox').classList.add('show');
+  setTimeout(() => {
+    if (!G) return;
+    try { HN = HINT.next(G.puz, G.vals, G.notes); } catch (e) { console.error(e); HN = null; }
+    if (!HN) { $('hbody').innerHTML = '<p class="ht">Sorry, I couldn\'t work out a hint here.</p><div class="hb"><button class="lnk" id="hreveal">Reveal a square instead</button></div>'; $('hreveal').onclick = revealCell; return; }
+    hintStage = HN.kind === 'none' ? 2 : 1;
+    G.used++; S.L[G.level].h++; markStarted(); saveCur();
+    renderHint(); refresh();
+    $('hintbox').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, 30);
+}
+function renderHint() {
+  if (!HN) return;
+  let body;
+  if (hintStage === 1) body = `<p class="ht">${esc(HN.nudge)}</p>`;
+  else if (HN.kind === 'trial' && HN.chain.length) body = `<p class="ht">${esc(HN.nudge.replace(/^No simple rule works here\. Try asking /, 'No simple rule works here, so ask '))} Follow it through:</p><ol>${HN.chain.map(c => `<li>${esc(c)}</li>`).join('')}<li><b>But then ${esc(HN.bad)}.</b></li></ol><p class="ht">That's impossible, so <b>${HINT.nm(HN.focus[0])} is not ${Math.log2(HN.elim[0][1])}</b>.</p>`;
+  else body = `<p class="ht">${esc(HN.text)}</p>`;
+  const canApply = HN.kind !== 'none';
+  $('hbody').innerHTML = body + `<div class="hb">${hintStage === 1 ? '<button class="btn alt" id="hexplain">Explain</button>' : ''}${canApply ? '<button class="btn" id="happly">Apply</button>' : ''}<button class="lnk" id="hreveal">Reveal a square</button></div>`;
+  if ($('hexplain')) $('hexplain').onclick = () => { hintStage = 2; renderHint(); };
+  if ($('happly')) $('happly').onclick = applyHint;
+  $('hreveal').onclick = revealCell;
+  $('hintbox').classList.add('show');
+}
+function applyHint() {
+  if (!G || !HN) return;
+  const h = HN; snapshot();
+  const r = HINT.apply(h, G.puz, G.vals, G.notes); G.vals = r.vals; G.notes = r.notes;
+  if (h.place) sel = h.place.i;
+  refresh(); saveCur(); checkDone();
+}
+function revealCell() {
   if (!G || paused || G.solved) return;
   const sol = G.puz.sol;
   let i = sel >= 0 && G.vals[sel] !== sol[sel] ? sel : -1;
   if (i < 0) i = G.vals.findIndex((v, k) => v && v !== sol[k]);
-  if (i < 0) { // reveal the empty cell with fewest options in its cage
-    const empty = [...Array(36).keys()].filter(k => !G.vals[k]);
-    if (!empty.length) return; i = empty[(Math.random() * empty.length) | 0];
-  }
-  snapshot(); G.vals[i] = sol[i]; G.notes[i] = 0; G.hinted.add(i); sel = i;
-  S.L[G.level].h++; markStarted(); refresh(); saveCur(); toast('Hint: one cell revealed'); checkDone();
+  if (i < 0) { const empty = [...Array(36).keys()].filter(k => !G.vals[k]); if (!empty.length) return; i = empty[(Math.random() * empty.length) | 0]; }
+  snapshot(); G.vals[i] = sol[i]; G.notes[i] = 0; G.hinted.add(i); sel = i; G.used++;
+  S.L[G.level].h++; markStarted(); refresh(); saveCur(); toast('One square revealed'); checkDone();
 }
 function check() {
   if (!G || paused || G.solved) return;
@@ -730,7 +978,7 @@ function checkDone() {
   if (!G.vals.every(Boolean)) return;
   if (!G.vals.every((v, i) => v === G.puz.sol[i])) { toast('Grid full, but something isn\'t right — try Check'); return; }
   G.solved = true; sel = -1;
-  const L = S.L[G.level], t = G.elapsed | 0, clean = G.hinted.size === 0;
+  const L = S.L[G.level], t = G.elapsed | 0, clean = G.hinted.size === 0 && !G.used;
   const prevBest = L.b;
   L.s++; L.t += t; L.l = t; if (clean && (!L.b || t < L.b)) L.b = t;
   const today = todayStr(), y = new Date(); y.setDate(y.getDate() - 1);
@@ -742,7 +990,7 @@ function checkDone() {
   $('donebar').classList.add('show'); $('pad').style.display = 'none'; document.querySelector('.tools').style.display = 'none';
   const pb = clean && L.b === t && prevBest !== t ? (prevBest ? ' · <b>New best!</b>' : ' · First solve at this level!') : '';
   setTimeout(() => modal(`<h2>Solved!</h2><p>${LNAME[G.level]} #${pad4(G.n)} in <b>${fmt(t)}</b>${pb}<br>
-    Best ${L.b ? fmt(L.b) : '—'} · Average ${fmt(L.t / L.s)} · ${G.hinted.size} hint${G.hinted.size === 1 ? '' : 's'}<br>
+    Best ${L.b ? fmt(L.b) : '—'} · Average ${fmt(L.t / L.s)} · ${G.used} hint${G.used === 1 ? '' : 's'}<br>
     Day streak: ${S.streak} · ${DONE[G.level].size} / ${PER} solved</p>`,
     [['Stats', 'alt', () => { closeModal(); show('stats'); }], ['Next puzzle', '', () => { closeModal(); $('donenext').click(); }]]), 350);
 }
@@ -827,7 +1075,7 @@ $('pad').addEventListener('click', e => { const b = e.target.closest('button'); 
 $('levels').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const l = b.dataset.l; if (G && l === G.level && !G.solved) return; openPuzzle(l, S.L[l].n || 1); });
 document.querySelector('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) show(b.dataset.v); });
 $('t-notes').onclick = () => { notesMode = !notesMode; refresh(); };
-$('t-allnotes').onclick = allNotes; $('t-erase').onclick = erase; $('t-undo').onclick = undo; $('t-hint').onclick = hint; $('t-check').onclick = check; $('t-reset').onclick = restart;
+$('hclose').onclick = () => { closeHint(); refresh(); }; $('t-allnotes').onclick = allNotes; $('t-erase').onclick = erase; $('t-undo').onclick = undo; $('t-hint').onclick = hint; $('t-check').onclick = check; $('t-reset').onclick = restart;
 const curN = () => G ? G.n : (S.L[S.lv].n || 1);
 $('prev').onclick = () => openPuzzle(S.lv, curN() > 1 ? curN() - 1 : PER);
 $('next').onclick = () => openPuzzle(S.lv, curN() < PER ? curN() + 1 : 1);
@@ -844,6 +1092,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'n' || e.key === 'N') { notesMode = !notesMode; return refresh(); }
   if (e.key === 'a' || e.key === 'A') return allNotes();
   if ((e.key === 'z' && (e.ctrlKey || e.metaKey)) || e.key === 'u') { e.preventDefault(); return undo(); }
+  if (e.key === 'h' || e.key === 'H') return hint();
   const mv = { ArrowUp: -6, ArrowDown: 6, ArrowLeft: -1, ArrowRight: 1 }[e.key];
   if (mv) { e.preventDefault(); if (sel < 0) sel = 0; else { const r = (sel / 6) | 0, c = sel % 6; if (mv === -1 && c === 0 || mv === 1 && c === 5) return; const nx = sel + mv; if (nx >= 0 && nx < 36) sel = nx; } refresh(); }
 });
