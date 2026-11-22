@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.37</title>
+<title>Eye Suite Stats v0.38</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -136,7 +136,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.37</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.38</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -213,7 +213,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.37</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.38</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -1487,6 +1487,10 @@ const TRENDS = [
     help: 'Phones opening an app for the first time, per 7 days. Mostly Google Ads installs.' },
   { k: 'rounds', group: 'play', label: 'Rounds per player a day', unit: 'dec', min: 20, get: perPd('rounds'),
     help: 'Main-game rounds divided by player-days (one player on one day).' },
+  // v0.38: the typical player, so one or two heavy players can't swing the picture
+  { k: 'typical', group: 'play', label: 'Typical player\'s rounds in 7 days', unit: 'dec', min: 7,
+    get: (pred, a, b) => { const r = ptRow(pred, b); return { v: r ? Number(r.median_rounds) : null, base: r ? Number(r.players) : 0 }; },
+    help: 'The middle player: half of the players who played in the 7 days played more rounds, half fewer. Unlike the average above, one or two very heavy players don\'t move it.' },
   { k: 'mins', group: 'play', label: 'Minutes per player a day', unit: 'dec', min: 20, get: perPd('seconds', 1 / 60),
     help: 'Play time divided by player-days.' },
   { k: 'opens', group: 'play', label: 'Opens per player a day', unit: 'dec2', min: 20, get: perPd('opens'),
@@ -1504,6 +1508,10 @@ const TRENDS = [
   { k: 'day30', group: 'back', label: 'Back on day 30', unit: 'pct', min: 20, lag: 30,
     get: (pred, a, b) => trendCohort(pred, a, b, 'back_day_30'),
     help: 'Of the players who first opened in the 7 days, the share who opened again exactly 30 days later. Visit records start on 20 Oct, so the first point appears once the players of 20\u201326 Oct have had 30 days (from 26 Nov).' },
+  // v0.38: are the most committed players still here?
+  { k: 'heavy', group: 'back', label: 'Heavy players still playing', unit: 'pct', min: 5,
+    get: (pred, a, b) => { const r = ptRow(pred, b); return { v: r && Number(r.heavy) ? 100 * r.heavy_active / r.heavy : null, base: r ? Number(r.heavy) : 0, n: r ? `${r.heavy_active} of ${r.heavy}` : '' }; },
+    help: 'Players with 100 or more rounds in total by a week earlier: the share who played in the 7 days. Falling means the most committed players are drifting away. Needs 5 such players to show.' },
   { k: 'lb', group: 'features', label: 'Leaderboard updates per 100 player-days', unit: 'dec', min: 20, get: perPd('leaderboard_updates', 100),
     help: 'Scores sent to the leaderboards. Rises as players join, automatically since the 15–18 Nov releases.' },
   { k: 'bonus', group: 'features', label: 'Bonus rounds per 100 player-days', unit: 'dec', min: 20, get: perPd('weekly_rounds', 100),
@@ -1547,6 +1555,11 @@ function trendLine(m, main, others){
   const lab = [days[0], days[Math.floor(days.length / 2)], days[days.length - 1]];
   lab.forEach((d, i) => { if (d) g += `<text x="${x(d)}" y="${H - 5}" text-anchor="${['start', 'middle', 'end'][i]}">${dayLabel(d)}</text>`; });
   return `<svg class="tline" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(m.label)} over time">${g}</svg>`;
+}
+// v0.38: player_trend rows: one per app and '_all' (all apps together) per day
+function ptRow(pred, day){
+  const rows = (state.data.player_trend || []).filter(r => r.day === day);
+  return rows.find(r => r.app === '_all' && pred(r)) || rows.find(r => r.app !== '_all' && pred(r)) || null;
 }
 // v0.37: "Is the player base growing?" in one sentence
 function baseLine(ch){
