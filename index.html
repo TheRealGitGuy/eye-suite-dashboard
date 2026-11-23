@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.41</title>
+<title>Eye Suite Stats v0.42</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -74,6 +74,11 @@ h2{font:italic 700 19px var(--serif);margin:0 0 10px}
 .askbox button,.asksug button{font:600 14px var(--sans);border-radius:999px;cursor:pointer}
 .askbox button{padding:10px 18px;border:0;background:var(--accent);color:#fff}
 .askbox button[disabled]{opacity:.5;cursor:default}
+/* v0.42: speak a question / hear the answer */
+.askbox button.askmic{background:transparent;color:var(--accent);border:2px solid var(--accent);padding:8px 16px}
+.askbox button.askmic.on{background:var(--bad);border-color:var(--bad);color:#fff;animation:micPulse 1.2s ease-in-out infinite}
+@keyframes micPulse{50%{opacity:.6}}
+.askspeak{font:600 13px var(--sans);border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:4px 12px;cursor:pointer;margin-top:4px}
 .asksug{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .asksug button{padding:5px 10px;border:1px solid var(--line);background:transparent;color:var(--ink);font-weight:500;font-size:13px}
 .askq{font-weight:700;margin:0 0 6px}
@@ -150,7 +155,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.41</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.42</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -227,7 +232,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.41</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.42</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -1499,16 +1504,42 @@ function askSection(){
   const scope = state.app !== 'all' ? `<p class="hint" style="margin:8px 0 0">The app filter is on <b>${esc(appName(state.app))}</b>, so questions are asked about that app.</p>` : '';
   const now = askState.busy ? `<div class="card"><p class="askq">${esc(askState.q)}</p><p class="hint">Working it out from the figures… usually 10–30 seconds.</p></div>`
     : askState.error ? `<div class="card"><p class="askq">${esc(askState.q)}</p><p class="askerr">${esc(askState.error)}</p></div>`
-    : askState.answer ? `<div class="card"><p class="askq">${esc(askState.q)}</p><div class="aska">${askMd(askState.answer)}</div><p class="hint" style="margin:6px 0 0">Answered ${esc(askState.at)} from figures up to now, test devices left out. Check anything important against the other tabs.</p></div>` : '';
+    : askState.answer ? `<div class="card"><p class="askq">${esc(askState.q)}</p><div class="aska">${askMd(askState.answer)}</div>${'speechSynthesis' in window ? `<button class="askspeak" onclick="askReadAloud()">🔊 Read aloud</button>` : ''}<p class="hint" style="margin:6px 0 0">Answered ${esc(askState.at)} from figures up to now, test devices left out. Check anything important against the other tabs.</p></div>` : '';
   const old = hist.filter(h => !(askState.answer && h.q === askState.q && h.a === askState.answer)).slice(0, 10);
   return `<section><div class="card">
     <div class="askbox"><textarea id="askInput" maxlength="500" placeholder="e.g. Which app keeps its players longest?">${esc(askState.busy ? '' : (document.getElementById('askInput') || {}).value || '')}</textarea>
+      ${ASK_SR ? `<button id="askMic" class="askmic" onclick="askVoice()" ${askState.busy ? 'disabled' : ''} aria-label="Speak your question">🎤 Speak</button>` : ''}
       <button id="askBtn" onclick="askSubmit()" ${askState.busy ? 'disabled' : ''}>${askState.busy ? 'Asking…' : 'Ask'}</button></div>
+    <p class="hint" id="askVoiceMsg" style="margin:6px 0 0"></p>
     <div class="asksug">${ASK_SUGGEST.map(q => `<button onclick="askSubmit(${esc(JSON.stringify(q))})">${esc(q)}</button>`).join('')}</div>${scope}
     <p class="hint" style="margin:10px 0 0">Each question costs a few pence (Claude, via Supabase); up to 60 a day. It knows the totals on these tabs and the dated changes on Trends, not individual players.</p>
   </div></section>
   ${now ? `<section>${now}</section>` : ''}
   ${old.length ? `<section><h2>Earlier questions</h2><div class="card">${old.map(h => `<details class="askold"><summary>${esc(h.q)} <span class="hint" style="font-weight:400">· ${esc(h.at)}</span></summary><div class="aska" style="margin-top:6px">${askMd(h.a)}</div></details>`).join('')}</div></section>` : ''}`;
+}
+// v0.42: speak the question (browser speech recognition: Chrome on Android and PC) and hear the answer.
+const ASK_SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let askRec = null;
+function askVoice(){
+  const msg = t => { const m = document.getElementById('askVoiceMsg'); if (m) m.textContent = t; };
+  const mic = () => document.getElementById('askMic');
+  if (askRec) { askRec.stop(); return; }   // second tap = stop now
+  const box = document.getElementById('askInput');
+  const rec = new ASK_SR(); rec.lang = 'en-GB'; rec.interimResults = true; rec.continuous = false; askRec = rec;
+  let final = '';
+  rec.onstart = () => { if (mic()) { mic().classList.add('on'); mic().textContent = '■ Listening… tap to stop'; } msg('Speak your question now.'); };
+  rec.onresult = e => { let t = ''; for (const r of e.results) { t += r[0].transcript; if (r.isFinal) final = t; } if (box) box.value = t; };
+  rec.onerror = e => { msg(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'The microphone is blocked for this page: allow it in the browser\'s site settings.'
+    : e.error === 'no-speech' ? 'Didn\'t hear anything. Tap Speak and try again.' : 'Voice input stopped (' + e.error + '). You can type instead.'); };
+  rec.onend = () => { askRec = null; if (mic()) { mic().classList.remove('on'); mic().textContent = '🎤 Speak'; }
+    const q = (final || (box && box.value) || '').trim();
+    if (q.length >= 3) { msg(''); askSubmit(q); } };
+  try { rec.start(); } catch (e) { askRec = null; msg('Voice input couldn\'t start. You can type instead.'); }
+}
+function askReadAloud(){
+  const t = String(askState.answer || '').replace(/\*\*/g, '').replace(/^\s*\|?\s*:?-{2,}.*$/gm, '').replace(/\|/g, ', ').replace(/^\s*[-*•]\s+/gm, '');
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(t); u.lang = 'en-GB'; speechSynthesis.speak(u);
 }
 async function askSubmit(preset){
   if (askState.busy) return;
