@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.40</title>
+<title>Eye Suite Stats v0.41</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -150,7 +150,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.40</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.41</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -227,7 +227,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.40</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.41</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -821,6 +821,8 @@ function render(){
   renderChips();
   renderSectionTabs();
   if (state.view) return renderDetail(state.view);
+  // v0.41: the 5-minute refresh (or returning to the tab) mustn't redraw the Ask box while someone is typing in it
+  if (state.section === 'ask' && isTyping() && !askForce) return;
   const main = document.getElementById('main');
   // v0.28: regrouped tabs; each opens with one line saying what it answers
   const sec = SECTIONS.find(x => x.id === state.section) || SECTIONS[0];
@@ -1473,6 +1475,9 @@ function adsSection(){
 const ASK_SUGGEST = ['Which app keeps its players longest?', 'How many ads were shown yesterday, by app and type?',
   'Is Flag Eye\'s growth coming from Google Ads?', 'What changed after the 20 Nov ad update?', 'Which app should get more ad spend, and why?'];
 let askState = { busy: false, q: '', answer: '', error: '', at: '' };
+let askForce = false;   // v0.41: set while the Ask tab itself asks for a redraw
+const isTyping = () => { const a = document.activeElement; return !!a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && a.type !== 'checkbox')); };
+function askRender(){ askForce = true; try { render(); } finally { askForce = false; } }
 function askMd(t){
   const inline = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
   const lines = String(t || '').split('\n'); let html = '', list = false, tbl = [];
@@ -1511,7 +1516,8 @@ async function askSubmit(preset){
   let q = String(preset || (box && box.value) || '').trim();
   if (q.length < 3) { if (box) box.focus(); return; }
   const sent = state.app !== 'all' ? `[About ${appName(state.app)} only] ${q}` : q;
-  askState = { busy: true, q, answer: '', error: '', at: '' }; render();
+  if (box) box.blur();   // close the phone keyboard while waiting
+  askState = { busy: true, q, answer: '', error: '', at: '' }; askRender();
   try {
     const r = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-ask`, { method: 'POST',
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
@@ -1524,7 +1530,7 @@ async function askSubmit(preset){
   } catch (e) {
     askState = { busy: false, q, answer: '', error: e.message || String(e), at: '' };
   }
-  render();
+  askRender();
 }
 document.addEventListener('keydown', e => { if (e.target && e.target.id === 'askInput' && e.key === 'Enter' && (e.ctrlKey || e.metaKey || !e.shiftKey)) { e.preventDefault(); askSubmit(); } });
 
@@ -1710,7 +1716,11 @@ window.addEventListener('hashchange', () => { const k = location.hash.slice(1); 
 if (METRICS[location.hash.slice(1)]) state.view = location.hash.slice(1);
 load();
 setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
-let resizeTimer; window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 200); });
+// v0.41: a phone's keyboard opening changes only the height; redrawing then threw away the text box being typed in.
+// Redraw only when the width changes, and never while a text box has focus.
+let resizeTimer, lastW = window.innerWidth;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => {
+  if (window.innerWidth === lastW || isTyping()) return; lastW = window.innerWidth; render(); }, 200); });
 // Home-screen app: register the service worker (needs https, e.g. GitHub Pages;
 // skipped when the file is opened straight from the PC) and refresh the figures
 // whenever the app comes back to the front.
