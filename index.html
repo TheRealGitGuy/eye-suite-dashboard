@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.39</title>
+<title>Eye Suite Stats v0.40</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -68,6 +68,20 @@ h2{font:italic 700 19px var(--serif);margin:0 0 10px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;min-width:0}
 .card h3{margin:0 0 10px;font-size:14px;font-weight:700}
 .card p.hint{margin:0 0 10px;font-size:12px;color:var(--soft)}
+/* v0.40: Ask tab */
+.askbox{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.askbox textarea{flex:1 1 260px;min-height:56px;font:15px var(--sans);padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);resize:vertical}
+.askbox button,.asksug button{font:600 14px var(--sans);border-radius:999px;cursor:pointer}
+.askbox button{padding:10px 18px;border:0;background:var(--accent);color:#fff}
+.askbox button[disabled]{opacity:.5;cursor:default}
+.asksug{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.asksug button{padding:5px 10px;border:1px solid var(--line);background:transparent;color:var(--ink);font-weight:500;font-size:13px}
+.askq{font-weight:700;margin:0 0 6px}
+.aska{font-size:15px;line-height:1.5}
+.aska p{margin:0 0 8px} .aska ul{margin:0 0 8px;padding-left:20px}
+.aska table{border-collapse:collapse;margin:4px 0 10px;font-size:13px} .aska td,.aska th{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left}
+.askerr{color:var(--bad)}
+details.askold{border-top:1px solid var(--line);padding:8px 0} details.askold summary{cursor:pointer;font-weight:600}
 /* v0.36: Trends tab */
 .tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
 .tcard h3{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
@@ -136,7 +150,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.39</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.40</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -213,7 +227,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.39</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.40</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -254,6 +268,7 @@ const appColour = id => `var(--${id})`;
 // claude/eye-suite-dashboard-review-v0.28-proposal.md); old saved tabs map across.
 const SECTIONS = [
   { id: 'overview', label: 'Overview', intro: 'How the apps are doing: today, this week and all time. Tap a figure for its detail.' },
+  { id: 'ask', label: 'Ask', intro: 'Ask a question in plain English. Claude answers from the same figures as this dashboard (test devices left out), and says when the figures can\'t answer it.' },   // v0.40
   { id: 'trends', label: 'Trends', intro: 'Is engagement rising or falling? Each line is a running 7-day figure, so one busy or quiet day doesn\'t swing it. Per-player figures, so a jump in new players doesn\'t hide how much each one plays.' },   // v0.36
   { id: 'players', label: 'Players', intro: 'Who arrives, where from, and whether they stay.' },
   { id: 'play', label: 'Play', intro: 'How players play: how long games last, how they end, the weekly bonus round and how far players get up the levels.' },
@@ -811,6 +826,7 @@ function render(){
   const sec = SECTIONS.find(x => x.id === state.section) || SECTIONS[0];
   const intro = sec.intro ? `<p class="sub tabintro">${sec.intro}</p>` : '';
   if (state.section === 'day') { main.innerHTML = daySection(); wireDay(); }
+  else if (state.section === 'ask') { main.innerHTML = intro + askSection(); }   // v0.40
   else if (state.section === 'trends') { main.innerHTML = intro + trendsSection(); }   // v0.36
   else if (state.section === 'players') { main.innerHTML = intro + playersSection(); wireFirstLast(); }
   else if (state.section === 'play') { main.innerHTML = intro + playSection(); wireLevels(); }
@@ -1448,6 +1464,69 @@ function adsSection(){
     <section><h2>Interstitials</h2><div class="detail" style="gap:12px">${adsGameCards()}</div></section>
     <section><h2>Ad log</h2>${extraAdLog()}</section>`;
 }
+
+
+// ------------------------------------------------------------- ask a question (v0.40)
+// The question goes to the dashboard-ask Edge Function, which builds compact
+// tables from get_dashboard_stats / get_dashboard_features (tests left out)
+// and asks Claude to answer from them. History stays in this browser only.
+const ASK_SUGGEST = ['Which app keeps its players longest?', 'How many ads were shown yesterday, by app and type?',
+  'Is Flag Eye\'s growth coming from Google Ads?', 'What changed after the 20 Nov ad update?', 'Which app should get more ad spend, and why?'];
+let askState = { busy: false, q: '', answer: '', error: '', at: '' };
+function askMd(t){
+  const inline = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  const lines = String(t || '').split('\n'); let html = '', list = false, tbl = [];
+  const flushTbl = () => { if (!tbl.length) return; const rows = tbl.filter(r => !/^\s*\|?\s*:?-{2,}/.test(r)).map(r => r.replace(/^\s*\||\|\s*$/g, '').split('|').map(c => c.trim()));
+    html += '<table>' + rows.map((r, i) => '<tr>' + r.map(c => i ? `<td>${inline(c)}</td>` : `<th>${inline(c)}</th>`).join('') + '</tr>').join('') + '</table>'; tbl = []; };
+  lines.forEach(l => {
+    if (/^\s*\|.*\|\s*$/.test(l)) { if (list) { html += '</ul>'; list = false; } tbl.push(l); return; }
+    flushTbl();
+    const b = l.match(/^\s*[-*•]\s+(.*)/);
+    if (b) { if (!list) { html += '<ul>'; list = true; } html += `<li>${inline(b[1])}</li>`; return; }
+    if (list) { html += '</ul>'; list = false; }
+    if (l.trim()) html += `<p>${inline(l)}</p>`;
+  });
+  flushTbl(); if (list) html += '</ul>';
+  return html;
+}
+function askSection(){
+  const hist = store.get('askHistory', []);
+  const scope = state.app !== 'all' ? `<p class="hint" style="margin:8px 0 0">The app filter is on <b>${esc(appName(state.app))}</b>, so questions are asked about that app.</p>` : '';
+  const now = askState.busy ? `<div class="card"><p class="askq">${esc(askState.q)}</p><p class="hint">Working it out from the figures… usually 10–30 seconds.</p></div>`
+    : askState.error ? `<div class="card"><p class="askq">${esc(askState.q)}</p><p class="askerr">${esc(askState.error)}</p></div>`
+    : askState.answer ? `<div class="card"><p class="askq">${esc(askState.q)}</p><div class="aska">${askMd(askState.answer)}</div><p class="hint" style="margin:6px 0 0">Answered ${esc(askState.at)} from figures up to now, test devices left out. Check anything important against the other tabs.</p></div>` : '';
+  const old = hist.filter(h => !(askState.answer && h.q === askState.q && h.a === askState.answer)).slice(0, 10);
+  return `<section><div class="card">
+    <div class="askbox"><textarea id="askInput" maxlength="500" placeholder="e.g. Which app keeps its players longest?">${esc(askState.busy ? '' : (document.getElementById('askInput') || {}).value || '')}</textarea>
+      <button id="askBtn" onclick="askSubmit()" ${askState.busy ? 'disabled' : ''}>${askState.busy ? 'Asking…' : 'Ask'}</button></div>
+    <div class="asksug">${ASK_SUGGEST.map(q => `<button onclick="askSubmit(${esc(JSON.stringify(q))})">${esc(q)}</button>`).join('')}</div>${scope}
+    <p class="hint" style="margin:10px 0 0">Each question costs a few pence (Claude, via Supabase); up to 60 a day. It knows the totals on these tabs and the dated changes on Trends, not individual players.</p>
+  </div></section>
+  ${now ? `<section>${now}</section>` : ''}
+  ${old.length ? `<section><h2>Earlier questions</h2><div class="card">${old.map(h => `<details class="askold"><summary>${esc(h.q)} <span class="hint" style="font-weight:400">· ${esc(h.at)}</span></summary><div class="aska" style="margin-top:6px">${askMd(h.a)}</div></details>`).join('')}</div></section>` : ''}`;
+}
+async function askSubmit(preset){
+  if (askState.busy) return;
+  const box = document.getElementById('askInput');
+  let q = String(preset || (box && box.value) || '').trim();
+  if (q.length < 3) { if (box) box.focus(); return; }
+  const sent = state.app !== 'all' ? `[About ${appName(state.app)} only] ${q}` : q;
+  askState = { busy: true, q, answer: '', error: '', at: '' }; render();
+  try {
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-ask`, { method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: sent }) });
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok || !out.answer) throw new Error(out.error || `The question service answered ${r.status}.`);
+    const at = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    askState = { busy: false, q, answer: out.answer, error: '', at };
+    store.set('askHistory', [{ q, a: out.answer, at }, ...store.get('askHistory', [])].slice(0, 20));
+  } catch (e) {
+    askState = { busy: false, q, answer: '', error: e.message || String(e), at: '' };
+  }
+  render();
+}
+document.addEventListener('keydown', e => { if (e.target && e.target.id === 'askInput' && e.key === 'Enter' && (e.ctrlKey || e.metaKey || !e.shiftKey)) { e.preventDefault(); askSubmit(); } });
 
 // ------------------------------------------------------------- trends (v0.36)
 // "Does engagement rise or fall over time?" Every point is a running 7-day
