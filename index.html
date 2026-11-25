@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.43</title>
+<title>Eye Suite Stats v0.44</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -155,7 +155,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.43</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.44</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -232,7 +232,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.43</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.44</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -289,7 +289,7 @@ const store = {
   get(k, d){ try { const v = localStorage.getItem('eyestats_' + k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
   set(k, v){ try { localStorage.setItem('eyestats_' + k, JSON.stringify(v)); } catch(e){} },
 };
-let state = { app: store.get('app', 'all'), includeTests: store.get('incTests', false), section: normSection(store.get('section', 'overview')), view: null, data: null, day: null, dayCache: {} };
+let state = { app: store.get('app', 'all'), includeTests: store.get('incTests', false), section: normSection(store.get('section', 'overview')), view: null, data: null, day: null, dayCache: {}, srcPer: store.get('srcPer', 'all') };
 
 const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '–' : Math.round(n).toLocaleString('en-GB');
 const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
@@ -856,6 +856,8 @@ function render(){
 document.getElementById('main').addEventListener('click', e => {   // v0.9: a day's bar opens that day
   const bar = e.target.closest && e.target.closest('rect[data-day]');
   if (bar) goToDay(bar.dataset.day);
+  const sp = e.target.closest && e.target.closest('[data-srcper] button');   // v0.44: sources period
+  if (sp) { state.srcPer = sp.dataset.v; store.set('srcPer', state.srcPer); render(); }
 });
 function renderSectionTabs(){
   const box = document.getElementById('sectionTabs');
@@ -1330,13 +1332,25 @@ function grouped(rows, keyFn, sumFields){
 
 // extra sections per metric
 function sourcesCard(){
-  const src = grouped(state.data.sources.filter(inApp), r => sourceLabel(r.source) + (r.campaign ? ' · ' + r.campaign : ''),
-    ['players', 'this_week', 'came_back', 'engaged', 'rounds_first_day']).sort((a, b) => b.players - a.players);
-  const hasNew = state.data.sources.some(r => r.engaged !== undefined);
-  return `<div class="card"><h3>Where players came from${chip('All time')}</h3><p class="hint">From the Play install referrer; tagged links (utm_source=…) show up by name, Google Ads by campaign number. <b>Came back</b> = opened the app again on a later UK day. <b>Played 10+</b> = 10 or more main-game rounds in total (the engaged mark the Google Ads campaigns bid on). <b>Rounds on day 1</b> = average main-game rounds on the player's first UK day. Compare the rows to see which sources bring players who stay.</p>
-    ${table([{ label: 'Source', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.players) }, { label: 'This week', n: 1, v: r => fmt(r.this_week) },
-      { label: 'Came back', n: 1, v: r => pct(r.came_back, r.players) },
-      ...(hasNew ? [{ label: 'Played 10+', n: 1, v: r => pct(r.engaged, r.players) }, { label: 'Rounds on day 1', n: 1, v: r => r.players ? num1(r.rounds_first_day / r.players) : '–' }] : [])], src)}</div>`;
+  // v0.44: Today / This week / All time, by the day each player first opened (UK)
+  const rows = state.data.sources.filter(inApp), hasPer = rows.some(r => r.today !== undefined);
+  const per = hasPer ? (state.srcPer || 'all') : 'all';
+  const F = { all: ['players', 'came_back', 'engaged', 'rounds_first_day'],
+              week: ['this_week', 'came_back_week', 'engaged_week', 'rounds_first_day_week'],
+              today: ['today', null, 'engaged_today', 'rounds_first_day_today'] }[per];
+  const src = grouped(rows, r => sourceLabel(r.source) + (r.campaign ? ' · ' + r.campaign : ''),
+    ['players', 'this_week', 'came_back', 'engaged', 'rounds_first_day', 'today', 'engaged_today', 'rounds_first_day_today', 'came_back_week', 'engaged_week', 'rounds_first_day_week'])
+    .map(r => ({ ...r, n: r[F[0]], cb: F[1] ? r[F[1]] : null, en: r[F[2]], r1: r[F[3]] }))
+    .filter(r => r.n > 0).sort((a, b) => b.n - a.n);
+  const hasNew = rows.some(r => r.engaged !== undefined);
+  const label = { all: 'All time', week: 'This week', today: 'Today' }[per];
+  const seg = hasPer ? `<div class="flctl" style="margin-bottom:8px"><span class="seg" data-srcper>${[['today', 'Today'], ['week', 'This week'], ['all', 'All time']].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${per === v}">${l}</button>`).join('')}</span></div>` : '';
+  const tot = src.reduce((t, r) => t + r.n, 0);
+  return `<div class="card"><h3>Where players came from${chip(label)}</h3><p class="hint">From the Play install referrer; tagged links (utm_source=…) show up by name, Google Ads by campaign number. <b>Today</b> / <b>This week</b> = players who first opened the app today / since Monday (UK). <b>Came back</b> = opened the app again on a later UK day (not shown for Today: too soon to tell). <b>Played 10+</b> = 10 or more main-game rounds in total (the engaged mark the Google Ads campaigns bid on). <b>Rounds on day 1</b> = average main-game rounds on the player's first UK day. Compare the rows to see which sources bring players who stay.</p>
+    ${seg}${table([{ label: 'Source', v: r => esc(r.key) }, { label: 'Players', n: 1, v: r => fmt(r.n) }, ...(per === 'all' ? [{ label: 'This week', n: 1, v: r => fmt(r.this_week) }] : []),
+      ...(per === 'today' ? [] : [{ label: 'Came back', n: 1, v: r => pct(r.cb, r.n) }]),
+      ...(hasNew ? [{ label: 'Played 10+', n: 1, v: r => pct(r.en, r.n) }, { label: 'Rounds on day 1', n: 1, v: r => r.n ? num1(r.r1 / r.n) : '–' }] : [])], src,
+      per === 'today' ? 'No new players yet today.' : per === 'week' ? 'No new players yet this week.' : '')}${per !== 'all' && tot ? `<p class="hint" style="margin-top:6px">${fmt(tot)} new player${tot === 1 ? '' : 's'} ${per === 'today' ? 'today' : 'this week'}.</p>` : ''}</div>`;
 }
 function localeCard(){
   const loc = grouped(state.data.locales.filter(inApp), r => localeLabel(r.locale), ['players']).sort((a, b) => b.players - a.players).slice(0, 15);
