@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.42</title>
+<title>Eye Suite Stats v0.43</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -155,7 +155,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.42</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.43</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -232,7 +232,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.42</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.43</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -326,16 +326,22 @@ async function load(){
     });
     if (!res.ok) throw new Error('the database answered ' + res.status);
     state.data = await res.json();
-    state.games = await loadGames();
-    state.streakEnds = await loadStreakEnds();
-    state.offerGate = await loadRpc('get_dashboard_offer_gate', { p_days: GAME_DAYS, p_include_tests: state.includeTests });
     state.dayCache = {};   // v0.9: day drill-ins are fetched on demand
-    state.features = await loadFeatures();
-    state.weeklyChallenge = await loadRpc('get_dashboard_weekly_challenge', { p_days: FEATURE_DAYS, p_include_tests: state.includeTests });
-    state.versions = await loadVersions();
-    state.firstLast = await loadRpc('get_dashboard_first_last', { p_include_tests: state.includeTests });   // v0.13
-    state.levels = await loadLevels();   // v0.17
+    // v0.43: show the main figures straight away, then fetch the other nine sets
+    // side by side (they used to load one after another, which made opening slow)
     setNotes('');
+    // tabs that only need the main figures can show at once; the others wait for their sets
+    if (['overview', 'trends', 'ask'].includes(state.section) || state.view) { render(); document.getElementById('updated').textContent = 'Loading the rest…'; }
+    const [games, streakEnds, offerGate, features, weekly, versions, firstLast, levels] = await Promise.all([
+      loadGames(), loadStreakEnds(),
+      loadRpc('get_dashboard_offer_gate', { p_days: GAME_DAYS, p_include_tests: state.includeTests }),
+      loadFeatures(),
+      loadRpc('get_dashboard_weekly_challenge', { p_days: FEATURE_DAYS, p_include_tests: state.includeTests }),
+      loadVersions(),
+      loadRpc('get_dashboard_first_last', { p_include_tests: state.includeTests }),   // v0.13
+      loadLevels(),   // v0.17
+    ]);
+    Object.assign(state, { games, streakEnds, offerGate, features, weeklyChallenge: weekly, versions, firstLast, levels });
   } catch (e) {
     setNotes(`<div class="note err">Couldn't load the figures: ${esc(e.message)}. Check the connection and press Refresh.</div>`);
     if (!state.data) { document.getElementById('main').innerHTML = ''; document.getElementById('updated').textContent = 'Not loaded'; return; }
