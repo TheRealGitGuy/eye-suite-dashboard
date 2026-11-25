@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Eye Suite Stats v0.44</title>
+<title>Eye Suite Stats v0.45</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15171b">
 <meta name="mobile-web-app-capable" content="yes">
@@ -155,7 +155,7 @@ ul.rules li{margin:0 0 6px}
 <body>
 <div id="gate" class="gate">
   <form id="gateForm" class="gateBox">
-    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.44</span></h1>
+    <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.45</span></h1>
     <p class="sub">Enter the password to view.</p>
     <input id="gatePass" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <button class="btn" type="submit">Unlock</button>
@@ -232,7 +232,7 @@ const GATE_KEY = 'eyestats_unlocked_v1';
 <div class="wrap">
   <header>
     <div>
-      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.44</span></h1>
+      <h1>Eye Suite Stats <span style="font:600 13px var(--sans);color:var(--soft);font-style:normal">v0.45</span></h1>
       <div class="sub" id="updated">Loading…</div>
     </div>
     <div class="controls">
@@ -1369,9 +1369,11 @@ function cohortCard(){
 }
 function extraNewPlayers(){
   const ver = state.data.versions.filter(inApp);
-  return `<div class="grid2">${sourcesCard()}${localeCard()}
+  // v0.45: sources full width, then app versions below it, then phone language
+  return `${sourcesCard()}<div class="grid2">
     <div class="card"><h3>App versions in use${chip('Last version seen')}</h3>
       ${table([{ label: 'App', v: appCell }, { label: 'Version', v: r => esc(r.version) }, { label: 'Players', n: 1, v: r => fmt(r.players) }], ver)}</div>
+    ${localeCard()}
   </div>`;
 }
 function extraActive(){
